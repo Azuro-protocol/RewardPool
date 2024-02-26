@@ -6,6 +6,7 @@
   "author": "Maksim Kiselev <maximkiselevrossia@gmail.com>",
   "license": "MIT",
   "dependencies": {
+    "@openzeppelin/contracts": "^5.0.1",
     "@openzeppelin/contracts-upgradeable": "^5.0.1",
     "@openzeppelin/hardhat-upgrades": "^3.0.3",
     "hardhat": "^2.20.1",
@@ -29,6 +30,6 @@
     "compile": "npx hardhat compile",
     "test": "npx hardhat test",
     "prettier-sol": "npx prettier --write \"contracts/**/*.sol\"",
-    "prettier-js": "npx prettier --write {scripts,test}/*.js --print-width 120 --tab-width 2"
+    "prettier-js": "npx prettier --write {scripts,test,utils}/*.js --print-width 120 --tab-width 2"
   }
 }
