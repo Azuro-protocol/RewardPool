@@ -68,6 +68,20 @@ const getDistributeRewardDetails = async (staking) => {
   };
 };
 
+const makeWithdrawReward = async (staking, staker, stakeId) => {
+  await staking.connect(staker).withdrawReward(stakeId);
+  return await getWithdrawRewardDetails(staking);
+};
+
+const getWithdrawRewardDetails = async (staking) => {
+  let filter = staking.filters.RewardWithdrawn;
+  let e = (await staking.queryFilter(filter, -1))[0].args;
+  return {
+    stakeId: e.stakeId,
+    reward: e.reward,
+  };
+};
+
 module.exports = {
   tokens,
   getBlockTime,
@@ -77,4 +91,6 @@ module.exports = {
   makeUnstake,
   getUnstakeDetails,
   makeDistributeReward,
+  makeWithdrawReward,
+  getWithdrawRewardDetails,
 };

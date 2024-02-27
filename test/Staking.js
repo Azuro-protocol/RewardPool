@@ -9,11 +9,13 @@ const {
   makeStakeFor,
   makeUnstake,
   makeDistributeReward,
+  makeWithdrawReward,
 } = require("../utils/utils");
 
 const INIT_MINT = tokens("100000");
 const VALIDATORMINSTAKE = 0;
 const BASE_STAKE = tokens("100");
+const BASE_REWARD = tokens("100");
 const BASE_DEPO = BASE_STAKE * 10n;
 const ONE_SECOND = 1;
 const ONE_DAY = 60 * 60 * 24;
@@ -86,7 +88,7 @@ describe("Staking", function () {
 
       await timeShiftBy(ethers, ONE_DAY);
 
-      await makeDistributeReward(staking, owner, [1], [BASE_STAKE]);
+      await makeDistributeReward(staking, owner, [1], [BASE_REWARD]);
 
       for (const i of resStakes) {
         expect((await makeUnstake(staking, i.staker, i.stake.stakeId)).amount).to.be.eq(BASE_STAKE);
@@ -95,9 +97,51 @@ describe("Staking", function () {
         balancesGains.push(gain);
         totalRewards += gain;
       }
-      expect(totalRewards).to.be.closeTo(BASE_STAKE, 1);
+      expect(totalRewards).to.be.closeTo(BASE_REWARD, 1);
 
       for (let i = 0; i < balancesGains.length - 1; i++) expect(balancesGains[i]).gt(balancesGains[i + 1]);
+    });
+    it("Get equal stakes from 3 stakers, add reward, withdraw rewards, second reward, check equality rewards", async function () {
+      const { staking, azur, owner, users, node } = await loadFixture(deployDistributorFixture);
+      let resStakes = [];
+      let resUnstakes = [];
+      let withdrawals = [];
+      let unstaked,
+        withdrawn,
+        totalRewards = 0n;
+
+      for (const i of users) {
+        resStakes.push({ stake: await makeStakeFor(staking, i, node, BASE_STAKE), staker: i });
+        await timeShiftBy(ethers, ONE_DAY);
+      }
+
+      await makeDistributeReward(staking, owner, [1], [BASE_REWARD]);
+
+      for (const i of resStakes) {
+        withdrawn = await makeWithdrawReward(staking, i.staker, i.stake.stakeId);
+        withdrawals.push(withdrawn);
+        await timeShiftBy(ethers, ONE_SECOND);
+
+        totalRewards += withdrawn.reward;
+      }
+      expect(totalRewards).to.be.closeTo(BASE_REWARD, 1);
+      for (let i = 0; i < resUnstakes.length - 1; i++) expect(resUnstakes[i].reward).gt(resUnstakes[i + 1].reward);
+
+      // second reward
+      await timeShiftBy(ethers, ONE_DAY);
+      await makeDistributeReward(staking, owner, [1], [BASE_REWARD]);
+
+      totalRewards = 0n;
+      withdrawals = [];
+      for (const i of resStakes) {
+        withdrawn = await makeWithdrawReward(staking, i.staker, i.stake.stakeId);
+        withdrawals.push(withdrawn);
+        totalRewards += withdrawn.reward;
+        await timeShiftBy(ethers, ONE_SECOND);
+      }
+
+      expect(totalRewards).to.be.closeTo(BASE_REWARD, 1);
+      for (let i = 0; i < withdrawals.length - 1; i++) expect(withdrawals[i].reward).eq(withdrawals[i + 1].reward);
     });
     it("Get 3 equal stakes from one staker, add reward, withdraw stakes with rewards depends of time", async function () {
       const { staking, owner, users, node } = await loadFixture(deployDistributorFixture);
@@ -112,7 +156,7 @@ describe("Staking", function () {
         await timeShiftBy(ethers, ONE_DAY);
       }
 
-      await makeDistributeReward(staking, owner, [1], [BASE_STAKE]);
+      await makeDistributeReward(staking, owner, [1], [BASE_REWARD]);
 
       for (const i of resStakes) {
         unstaked = await makeUnstake(staking, user, i.stakeId);
@@ -123,7 +167,7 @@ describe("Staking", function () {
         expect(unstaked.amount).to.be.eq(BASE_STAKE);
       }
 
-      expect(totalRewards).to.be.closeTo(BASE_STAKE, 1);
+      expect(totalRewards).to.be.closeTo(BASE_REWARD, 1);
       for (let i = 0; i < resUnstakes.length - 1; i++) expect(resUnstakes[i].reward).gt(resUnstakes[i + 1].reward);
     });
     it("Get equal stakes from 3 stakers, second staker withdrawn, add reward, withdraw stakes with rewards", async function () {
@@ -142,7 +186,7 @@ describe("Staking", function () {
       // second staker withdraw
       expect((await makeUnstake(staking, resStakes[1].staker, resStakes[1].stake.stakeId)).amount).to.be.eq(BASE_STAKE);
 
-      await makeDistributeReward(staking, owner, [1], [BASE_STAKE]);
+      await makeDistributeReward(staking, owner, [1], [BASE_REWARD]);
 
       for (const i of resStakes) {
         // exclude second staker
@@ -154,7 +198,7 @@ describe("Staking", function () {
         totalRewards += gain;
       }
       expect(await azur.balanceOf(resStakes[1].staker)).to.be.eq(BASE_DEPO);
-      expect(totalRewards).to.be.closeTo(BASE_STAKE, 1);
+      expect(totalRewards).to.be.closeTo(BASE_REWARD, 1);
       expect(balancesGains[0]).gt(balancesGains[1]);
     });
   });
