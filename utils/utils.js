@@ -41,12 +41,15 @@ const makeUnstake = async (staking, staker, stakeId) => {
 
 const getUnstakeDetails = async (staking) => {
   let filter = staking.filters.Unstaked;
+  let filterReward = staking.filters.RewardWithdrawn;
   let e = (await staking.queryFilter(filter, -1))[0].args;
+  let eReward = (await staking.queryFilter(filterReward, -1))[0].args;
   return {
     stakeId: e.stakeId,
     staker: e.staker,
     nodeId: e.nodeId,
     amount: e.amount,
+    reward: eReward.reward,
   };
 };
 

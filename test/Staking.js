@@ -15,6 +15,7 @@ const INIT_MINT = tokens("100000");
 const VALIDATORMINSTAKE = 0;
 const BASE_STAKE = tokens("100");
 const BASE_DEPO = BASE_STAKE * 10n;
+const ONE_SECOND = 1;
 const ONE_DAY = 60 * 60 * 24;
 const ONE_WEEK = ONE_DAY * 7;
 
@@ -97,6 +98,33 @@ describe("Staking", function () {
       expect(totalRewards).to.be.closeTo(BASE_STAKE, 1);
 
       for (let i = 0; i < balancesGains.length - 1; i++) expect(balancesGains[i]).gt(balancesGains[i + 1]);
+    });
+    it("Get 3 equal stakes from one staker, add reward, withdraw stakes with rewards depends of time", async function () {
+      const { staking, owner, users, node } = await loadFixture(deployDistributorFixture);
+      let resStakes = [];
+      let resUnstakes = [];
+      let unstaked,
+        totalRewards = 0n,
+        user = users[0];
+
+      for (const i of Array(3).keys()) {
+        resStakes.push(await makeStakeFor(staking, user, node, BASE_STAKE));
+        await timeShiftBy(ethers, ONE_DAY);
+      }
+
+      await makeDistributeReward(staking, owner, [1], [BASE_STAKE]);
+
+      for (const i of resStakes) {
+        unstaked = await makeUnstake(staking, user, i.stakeId);
+        await timeShiftBy(ethers, ONE_SECOND);
+
+        resUnstakes.push(unstaked);
+        totalRewards += unstaked.reward;
+        expect(unstaked.amount).to.be.eq(BASE_STAKE);
+      }
+
+      expect(totalRewards).to.be.closeTo(BASE_STAKE, 1);
+      for (let i = 0; i < resUnstakes.length - 1; i++) expect(resUnstakes[i].reward).gt(resUnstakes[i + 1].reward);
     });
     it("Get equal stakes from 3 stakers, second staker withdrawn, add reward, withdraw stakes with rewards", async function () {
       const { staking, azur, owner, users, node } = await loadFixture(deployDistributorFixture);
