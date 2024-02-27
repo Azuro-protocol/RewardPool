@@ -125,8 +125,8 @@ describe("Staking", function () {
         balancesGains.push(gain);
         totalRewards += gain;
       }
+      expect(await azur.balanceOf(resStakes[1].staker)).to.be.eq(BASE_DEPO);
       expect(totalRewards).to.be.closeTo(BASE_STAKE, 1);
-
       expect(balancesGains[0]).gt(balancesGains[1]);
     });
   });
