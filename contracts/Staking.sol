@@ -38,16 +38,24 @@ contract Staking is OwnableUpgradeable, IStaking {
     using SafeERC20 for IERC20;
     using SafeCast for uint256;
 
-    /// @notice Magnitude by which values are multiplied in reward calculations
+    /**
+     * @notice Magnitude by which values are multiplied in reward calculations
+     */
     uint256 private constant MAGNITUDE = type(uint128).max;
 
-    /// @notice Token user in staking
+    /**
+     * @notice Token user in staking
+     */
     IERC20 public token;
 
-    /// @notice Mapping of distribution ID's to their information
+    /**
+     * @notice Mapping of distribution ID's to their information
+     */
     mapping(uint32 => Distribution) public distributions;
 
-    /// @notice Mapping of stake ID's to their information
+    /**
+     * @notice Mapping of stake ID's to their information
+     */
     mapping(uint256 => Stake) public stake;
 
     uint256 public lastStakeId;
@@ -55,19 +63,21 @@ contract Staking is OwnableUpgradeable, IStaking {
     uint96 public totalStaked;
     uint256 public rewardPerPower;
 
-    /// @notice Contract's initializer
-    /// @param token_ Contract of token used in staking
+    /**
+     * @notice Contract's initializer
+     * @param token_ Contract of token used in staking
+     */
     function initialize(IERC20 token_) external initializer {
         __Ownable_init(msg.sender);
         token = token_;
         distributions[0].time = block.timestamp.toUint64();
     }
 
-    // RESTRICTED FUNCTIONS
-
-    /// @notice Owner's function that is used to distribute rewards for stakes
-    /// @param reward rewards to distribution
-    /// @dev Function transfers distributed reward to contract, approval is required in prior
+    /**
+     * @notice Owner's function that is used to distribute rewards for stakes
+     * @dev Function transfers distributed reward to contract, approval is required in prior
+     * @param reward rewards to distribution
+     */
     function distributeReward(uint256 reward) external onlyOwner {
         token.safeTransferFrom(msg.sender, address(this), reward);
         _distributeReward(reward);
@@ -75,12 +85,12 @@ contract Staking is OwnableUpgradeable, IStaking {
         emit RewardDistributed(reward);
     }
 
-    // PUBLIC FUNCTIONS
-
-    /// @notice Creates new stake
-    /// @param amount Amount to stake
-    /// @dev Transfers `amount` of `token` to the contract, approval is required in prior
-    /// @return stakeId ID of the created stake
+    /**
+     * @notice Creates new stake
+     * @dev Transfers `amount` of `token` to the contract, approval is required in prior
+     * @param amount Amount to stake
+     * @return stakeId ID of the created stake
+     */
     function stakeFor(uint96 amount) external returns (uint256 stakeId) {
         // This stake's first distribution will be next distribution
         uint32 distributionId = lastDistributionId + 1;
@@ -110,41 +120,53 @@ contract Staking is OwnableUpgradeable, IStaking {
         emit Staked(stakeId, msg.sender, amount);
     }
 
-    /// @notice Withdraws accumulated reward for given stake
-    /// @param stakeId ID of the stake to collect reward for
+    /**
+     *  @notice Withdraws accumulated reward for given stake
+     *  @param stakeId ID of the stake to collect reward for
+     */
     function withdrawReward(uint256 stakeId) public {
         _withdrawReward(stakeId);
     }
 
-    /// @notice Withdraws accumulated reward for list of given stakes
-    /// @param stakeIds List of IDs of the stakes to collect reward for
+    /**
+     *  @notice Withdraws accumulated reward for list of given stakes
+     *  @param stakeIds List of IDs of the stakes to collect reward for
+     */
     function batchWithdrawReward(uint256[] calldata stakeIds) public {
         for (uint256 i = 0; i < stakeIds.length; i++) {
             _withdrawReward(stakeIds[i]);
         }
     }
 
-    /// @notice Unstakes given stake (and collects reward in process)
-    /// @param stakeId ID of the stake to withdraw
+    /**
+     *  @notice Unstakes given stake (and collects reward in process)
+     *  @param stakeId ID of the stake to withdraw
+     */
     function unstake(uint256 stakeId) external {
         _unstake(stakeId);
     }
 
-    /// @notice Unstakes list of given stakes (and collects reward in process)
-    /// @param stakeIds List of IDs of the stakes to withdraw
+    /**
+     *  @notice Unstakes list of given stakes (and collects reward in process)
+     *  @param stakeIds List of IDs of the stakes to withdraw
+     */
     function batchUnstake(uint256[] calldata stakeIds) external {
         for (uint256 i = 0; i < stakeIds.length; i++) _unstake(stakeIds[i]);
     }
 
-    /// @notice Returns current reward of given stake
-    /// @param stakeId ID of the stake to get reward for
-    /// @return Current reward
+    /**
+     *  @notice Returns current reward of given stake
+     *  @param stakeId ID of the stake to get reward for
+     *  @return Current reward
+     */
     function rewardOf(uint256 stakeId) public view returns (uint96) {
         return _accumulatedRewardOf(stakeId) - stake[stakeId].withdrawnReward;
     }
 
-    /// @notice Internal function that processes reward distribution for one node
-    /// @param reward Distributed reward
+    /**
+     *  @notice Internal function that processes reward distribution for one node
+     *  @param reward Distributed reward
+     */
     function _distributeReward(uint256 reward) private {
         uint32 distributionId = ++lastDistributionId;
         Distribution storage distribution = distributions[distributionId];
@@ -186,8 +208,10 @@ contract Staking is OwnableUpgradeable, IStaking {
             .toUint96();
     }
 
-    /// @notice Internal function that collects reward for given stake
-    /// @param stakeId ID of the stake
+    /**
+     *  @notice Internal function that collects reward for given stake
+     *  @param stakeId ID of the stake
+     */
     function _withdrawReward(uint256 stakeId) private {
         require(stake[stakeId].owner == msg.sender, "NOT_STAKE_OWNER");
 
@@ -198,8 +222,10 @@ contract Staking is OwnableUpgradeable, IStaking {
         emit RewardWithdrawn(stakeId, reward);
     }
 
-    /// @notice Internal function that unstakes given stake
-    /// @param stakeId ID of the stake
+    /**
+     *  @notice Internal function that unstakes given stake
+     *  @param stakeId ID of the stake
+     */
     function _unstake(uint256 stakeId) private {
         _withdrawReward(stakeId);
 
@@ -221,9 +247,11 @@ contract Staking is OwnableUpgradeable, IStaking {
         emit Unstaked(stakeId, msg.sender, amount);
     }
 
-    /// @notice Internal function that calculates total accumulated reward for stake (without withdrawals)
-    /// @param stakeId ID of the stake
-    /// @return Total reward
+    /**
+     *  @notice Internal function that calculates total accumulated reward for stake (without withdrawals)
+     *  @param stakeId ID of the stake
+     *  @return Total reward
+     */
     function _accumulatedRewardOf(
         uint256 stakeId
     ) private view returns (uint96) {
