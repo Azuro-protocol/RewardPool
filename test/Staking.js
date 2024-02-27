@@ -20,7 +20,6 @@ const ONE_WEEK = ONE_DAY * 7;
 
 describe("Staking", function () {
   async function deployDistributorFixture() {
-    // Contracts are deployed using the first signer/account by default
     const [owner, validator, user1, user2, user3] = await ethers.getSigners();
     const users = [user1, user2, user3];
 
@@ -55,7 +54,7 @@ describe("Staking", function () {
       expect(node).to.equal(1);
     });
     it("Get equal stakes from 3 stakers, withdraw stakes", async function () {
-      const { staking, azur, owner, validator, users, node } = await loadFixture(deployDistributorFixture);
+      const { staking, users, node } = await loadFixture(deployDistributorFixture);
       let resStakes = [];
       let resUnstake;
 
@@ -63,14 +62,17 @@ describe("Staking", function () {
         resStakes.push({ stake: await makeStakeFor(staking, i, node, BASE_STAKE), staker: i });
         await timeShiftBy(ethers, ONE_DAY);
       }
+      // last staker add second stake
+      resStakes.push({ stake: await makeStakeFor(staking, users[2], node, BASE_STAKE), staker: users[2] });
 
       for (const i of resStakes) {
         resUnstake = await makeUnstake(staking, i.staker, i.stake.stakeId);
+        await timeShiftBy(ethers, ONE_DAY);
         expect(resUnstake.amount).to.be.eq(BASE_STAKE);
       }
     });
     it("Get equal stakes from 3 stakers, add reward, withdraw stakes", async function () {
-      const { staking, azur, owner, validator, users, node } = await loadFixture(deployDistributorFixture);
+      const { staking, azur, owner, users, node } = await loadFixture(deployDistributorFixture);
       let resStakes = [];
       let balancesGains = [];
       let totalRewards = 0n,
@@ -95,6 +97,37 @@ describe("Staking", function () {
       expect(totalRewards).to.be.closeTo(BASE_STAKE, 1);
 
       for (let i = 0; i < balancesGains.length - 1; i++) expect(balancesGains[i]).gt(balancesGains[i + 1]);
+    });
+    it("Get equal stakes from 3 stakers, second staker withdrawn, add reward, withdraw stakes with rewards", async function () {
+      const { staking, azur, owner, users, node } = await loadFixture(deployDistributorFixture);
+      let resStakes = [];
+      let balancesGains = [];
+      let totalRewards = 0n,
+        gain;
+
+      for (const i of users) {
+        resStakes.push({ stake: await makeStakeFor(staking, i, node, BASE_STAKE), staker: i });
+        await timeShiftBy(ethers, ONE_WEEK);
+      }
+      await timeShiftBy(ethers, ONE_DAY);
+
+      // second staker withdraw
+      expect((await makeUnstake(staking, resStakes[1].staker, resStakes[1].stake.stakeId)).amount).to.be.eq(BASE_STAKE);
+
+      await makeDistributeReward(staking, owner, [1], [BASE_STAKE]);
+
+      for (const i of resStakes) {
+        // exclude second staker
+        if (i.staker == resStakes[1].staker) continue;
+        expect((await makeUnstake(staking, i.staker, i.stake.stakeId)).amount).to.be.eq(BASE_STAKE);
+
+        gain = (await azur.balanceOf(i.staker.address)) - BASE_DEPO;
+        balancesGains.push(gain);
+        totalRewards += gain;
+      }
+      expect(totalRewards).to.be.closeTo(BASE_STAKE, 1);
+
+      expect(balancesGains[0]).gt(balancesGains[1]);
     });
   });
 });
