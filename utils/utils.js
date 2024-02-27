@@ -18,8 +18,8 @@ async function timeShiftBy(ethers, timeDelta) {
   await network.provider.send("evm_mine");
 }
 
-const makeStakeFor = async (staking, staker, node, amount) => {
-  await staking.connect(staker).stakeFor(node, amount);
+const makeStakeFor = async (staking, staker, amount) => {
+  await staking.connect(staker).stakeFor(amount);
   return await getStakeForDetails(staking);
 };
 
@@ -29,7 +29,6 @@ const getStakeForDetails = async (staking) => {
   return {
     stakeId: e.stakeId,
     staker: e.staker,
-    nodeId: e.nodeId,
     amount: e.amount,
   };
 };
@@ -47,14 +46,13 @@ const getUnstakeDetails = async (staking) => {
   return {
     stakeId: e.stakeId,
     staker: e.staker,
-    nodeId: e.nodeId,
     amount: e.amount,
     reward: eReward.reward,
   };
 };
 
-const makeDistributeReward = async (staking, owner, nodeIds, rewards) => {
-  await staking.connect(owner).distributeReward(nodeIds, rewards);
+const makeDistributeReward = async (staking, owner, reward) => {
+  await staking.connect(owner).distributeReward(reward);
   return await getDistributeRewardDetails(staking);
 };
 
@@ -62,7 +60,6 @@ const getDistributeRewardDetails = async (staking) => {
   let filter = staking.filters.RewardDistributed;
   let e = (await staking.queryFilter(filter, -1))[0].args;
   return {
-    nodeId: e.nodeId,
     reward: e.reward,
     fee: e.fee,
   };
