@@ -56,21 +56,40 @@ contract Staking is OwnableUpgradeable, IStaking {
     /**
      * @notice Mapping of stake ID's to their information
      */
-    mapping(uint256 => Stake) public stake;
+    mapping(uint256 => Stake) public stakes;
+
+    /**
+     * @notice Mapping of stake ID's to their information requested to be unstaked
+     */
+    mapping(uint256 => Unstake) public unstakes;
 
     uint256 public lastStakeId;
     uint32 public lastDistributionId;
     uint96 public totalStaked;
     uint256 public rewardPerPower;
+    uint256 public unstakePeriod;
 
     /**
      * @notice Contract's initializer
      * @param token_ Contract of token used in staking
      */
-    function initialize(IERC20 token_) external initializer {
+    function initialize(
+        IERC20 token_,
+        uint256 unstakePeriod_
+    ) external initializer {
         __Ownable_init(msg.sender);
         token = token_;
+        unstakePeriod = unstakePeriod_;
         distributions[0].time = block.timestamp.toUint64();
+    }
+
+    /**
+     * @notice Owner's function that is used to change unstake period
+     * @param newUnstakePeriod new unstake period, will be actual for new unstake requests
+     */
+    function changeUnstakePeriod(uint256 newUnstakePeriod) external onlyOwner {
+        unstakePeriod = newUnstakePeriod;
+        emit UnstakePeriodChanged(newUnstakePeriod);
     }
 
     /**
@@ -86,6 +105,41 @@ contract Staking is OwnableUpgradeable, IStaking {
     }
 
     /**
+     *  @notice Request to unstake list of given stakes (and collects reward in process)
+     *  @param stakeIds List of IDs of the stakes to request withdraw
+     */
+    function batchRequestUnstake(uint256[] calldata stakeIds) external {
+        for (uint256 i = 0; i < stakeIds.length; i++)
+            _requestUnstake(stakeIds[i]);
+    }
+
+    /**
+     *  @notice Unstakes list of given stakes (and collects reward in process)
+     *  @param stakeIds List of IDs of the stakes to withdraw
+     */
+    function batchUnstake(uint256[] calldata stakeIds) external {
+        for (uint256 i = 0; i < stakeIds.length; i++) _unstake(stakeIds[i]);
+    }
+
+    /**
+     *  @notice Withdraws accumulated reward for list of given stakes
+     *  @param stakeIds List of IDs of the stakes to collect reward for
+     */
+    function batchWithdrawReward(uint256[] calldata stakeIds) public {
+        for (uint256 i = 0; i < stakeIds.length; i++) {
+            _withdrawReward(stakeIds[i]);
+        }
+    }
+
+    /**
+     *  @notice Request to unstake given stake (and collects reward in process)
+     *  @param stakeId ID of the stake to request withdraw
+     */
+    function requestUnstake(uint256 stakeId) external {
+        _requestUnstake(stakeId);
+    }
+
+    /**
      * @notice Creates new stake
      * @dev Transfers `amount` of `token` to the contract, approval is required in prior
      * @param amount Amount to stake
@@ -96,7 +150,7 @@ contract Staking is OwnableUpgradeable, IStaking {
         uint32 distributionId = lastDistributionId + 1;
 
         stakeId = ++lastStakeId;
-        stake[stakeId] = Stake({
+        stakes[stakeId] = Stake({
             owner: msg.sender,
             amount: amount,
             time: block.timestamp.toUint64(),
@@ -121,24 +175,6 @@ contract Staking is OwnableUpgradeable, IStaking {
     }
 
     /**
-     *  @notice Withdraws accumulated reward for given stake
-     *  @param stakeId ID of the stake to collect reward for
-     */
-    function withdrawReward(uint256 stakeId) public {
-        _withdrawReward(stakeId);
-    }
-
-    /**
-     *  @notice Withdraws accumulated reward for list of given stakes
-     *  @param stakeIds List of IDs of the stakes to collect reward for
-     */
-    function batchWithdrawReward(uint256[] calldata stakeIds) public {
-        for (uint256 i = 0; i < stakeIds.length; i++) {
-            _withdrawReward(stakeIds[i]);
-        }
-    }
-
-    /**
      *  @notice Unstakes given stake (and collects reward in process)
      *  @param stakeId ID of the stake to withdraw
      */
@@ -147,11 +183,11 @@ contract Staking is OwnableUpgradeable, IStaking {
     }
 
     /**
-     *  @notice Unstakes list of given stakes (and collects reward in process)
-     *  @param stakeIds List of IDs of the stakes to withdraw
+     *  @notice Withdraws accumulated reward for given stake
+     *  @param stakeId ID of the stake to collect reward for
      */
-    function batchUnstake(uint256[] calldata stakeIds) external {
-        for (uint256 i = 0; i < stakeIds.length; i++) _unstake(stakeIds[i]);
+    function withdrawReward(uint256 stakeId) public {
+        _withdrawReward(stakeId);
     }
 
     /**
@@ -160,7 +196,7 @@ contract Staking is OwnableUpgradeable, IStaking {
      *  @return Current reward
      */
     function rewardOf(uint256 stakeId) public view returns (uint96) {
-        return _accumulatedRewardOf(stakeId) - stake[stakeId].withdrawnReward;
+        return _accumulatedRewardOf(stakeId) - stakes[stakeId].withdrawnReward;
     }
 
     /**
@@ -190,7 +226,7 @@ contract Staking is OwnableUpgradeable, IStaking {
 
         uint256 power = fullPower + partialPower;
         // Reward for full powers is calculated proporionate to total full and partial powers
-        require(power > 0, "NO_STAKES");
+        if (power == 0) revert NoStakes();
         uint256 rewardForFullPower = (reward * fullPower) / power;
 
         // If full powers actually exist in this distribution we calculate (magnified) rewardPerPower delta
@@ -213,13 +249,43 @@ contract Staking is OwnableUpgradeable, IStaking {
      *  @param stakeId ID of the stake
      */
     function _withdrawReward(uint256 stakeId) private {
-        require(stake[stakeId].owner == msg.sender, "NOT_STAKE_OWNER");
+        if (stakes[stakeId].owner != msg.sender) revert NotStakeOwner();
 
         uint96 reward = rewardOf(stakeId);
-        stake[stakeId].withdrawnReward += reward;
+        stakes[stakeId].withdrawnReward += reward;
         token.safeTransfer(msg.sender, reward);
 
         emit RewardWithdrawn(stakeId, reward);
+    }
+
+    /**
+     *  @notice Internal function that request unstake of given stake
+     *  @param stakeId ID of the stake
+     */
+    function _requestUnstake(uint256 stakeId) private {
+        _withdrawReward(stakeId);
+
+        uint32 distributionId = lastDistributionId + 1;
+        uint96 amount = stakes[stakeId].amount;
+
+        totalStaked -= amount;
+        if (stakes[stakeId].firstDistributionId == distributionId) {
+            distributions[distributionId].stakedIn -= amount;
+
+            uint160 timeDelta = stakes[stakeId].time -
+                distributions[distributionId - 1].time;
+            distributions[distributionId].powerXTimeDelta -= timeDelta * amount;
+        }
+
+        unstakes[stakeId] = Unstake({
+            owner: msg.sender,
+            amount: amount,
+            time: (block.timestamp + unstakePeriod).toUint64()
+        });
+
+        delete stakes[stakeId];
+
+        emit UnstakeRequested(stakeId, msg.sender, amount);
     }
 
     /**
@@ -227,24 +293,15 @@ contract Staking is OwnableUpgradeable, IStaking {
      *  @param stakeId ID of the stake
      */
     function _unstake(uint256 stakeId) private {
-        _withdrawReward(stakeId);
+        Unstake memory unstake_ = unstakes[stakeId];
+        if (unstake_.owner == address(0) || unstake_.amount == 0)
+            revert IncorrectUnstake();
+        if (block.timestamp < unstake_.time) revert IncorrectUnstakeTime();
 
-        uint32 distributionId = lastDistributionId + 1;
-        uint96 amount = stake[stakeId].amount;
+        delete unstakes[stakeId];
+        token.safeTransfer(unstake_.owner, unstake_.amount);
 
-        totalStaked -= amount;
-        if (stake[stakeId].firstDistributionId == distributionId) {
-            distributions[distributionId].stakedIn -= amount;
-
-            uint160 timeDelta = stake[stakeId].time -
-                distributions[distributionId - 1].time;
-            distributions[distributionId].powerXTimeDelta -= timeDelta * amount;
-        }
-
-        token.safeTransfer(msg.sender, amount);
-        delete stake[stakeId];
-
-        emit Unstaked(stakeId, msg.sender, amount);
+        emit Unstaked(stakeId, unstake_.owner, unstake_.amount);
     }
 
     /**
@@ -255,7 +312,7 @@ contract Staking is OwnableUpgradeable, IStaking {
     function _accumulatedRewardOf(
         uint256 stakeId
     ) private view returns (uint96) {
-        Stake memory stake_ = stake[stakeId];
+        Stake memory stake_ = stakes[stakeId];
         Distribution memory firstDistribution = distributions[
             stake_.firstDistributionId
         ];

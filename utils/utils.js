@@ -33,13 +33,13 @@ const getStakeForDetails = async (staking) => {
   };
 };
 
-const makeUnstake = async (staking, staker, stakeId) => {
-  await staking.connect(staker).unstake(stakeId);
-  return await getUnstakeDetails(staking);
+const makeRequestUnstake = async (staking, staker, stakeId) => {
+  await staking.connect(staker).requestUnstake(stakeId);
+  return await getRequestUnstakeDetails(staking);
 };
 
-const getUnstakeDetails = async (staking) => {
-  let filter = staking.filters.Unstaked;
+const getRequestUnstakeDetails = async (staking) => {
+  let filter = staking.filters.UnstakeRequested;
   let filterReward = staking.filters.RewardWithdrawn;
   let e = (await staking.queryFilter(filter, -1))[0].args;
   let eReward = (await staking.queryFilter(filterReward, -1))[0].args;
@@ -48,6 +48,21 @@ const getUnstakeDetails = async (staking) => {
     staker: e.staker,
     amount: e.amount,
     reward: eReward.reward,
+  };
+};
+
+const makeUnstake = async (staking, staker, stakeId) => {
+  await staking.connect(staker).unstake(stakeId);
+  return await getUnstakeDetails(staking);
+};
+
+const getUnstakeDetails = async (staking) => {
+  let filter = staking.filters.Unstaked;
+  let e = (await staking.queryFilter(filter, -1))[0].args;
+  return {
+    stakeId: e.stakeId,
+    staker: e.staker,
+    amount: e.amount,
   };
 };
 
@@ -87,6 +102,8 @@ module.exports = {
   getStakeForDetails,
   makeUnstake,
   getUnstakeDetails,
+  makeRequestUnstake,
+  getRequestUnstakeDetails,
   makeDistributeReward,
   makeWithdrawReward,
   getWithdrawRewardDetails,

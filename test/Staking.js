@@ -8,9 +8,11 @@ const {
   timeShiftBy,
   makeStakeFor,
   makeUnstake,
+  makeRequestUnstake,
   makeDistributeReward,
   makeWithdrawReward,
 } = require("../utils/utils");
+const { Log } = require("ethers");
 
 const INIT_MINT = tokens("100000");
 const BASE_STAKE = tokens("100");
@@ -19,6 +21,7 @@ const BASE_DEPO = BASE_STAKE * 10n;
 const ONE_SECOND = 1;
 const ONE_DAY = 60 * 60 * 24;
 const ONE_WEEK = ONE_DAY * 7;
+const UNSTAKEPERIOD = ONE_WEEK;
 
 describe("Staking", function () {
   async function deployDistributorFixture() {
@@ -31,7 +34,7 @@ describe("Staking", function () {
 
     const STAKING = await ethers.getContractFactory("Staking", { signer: owner });
 
-    const staking = await upgrades.deployProxy(STAKING, [await azur.getAddress()]);
+    const staking = await upgrades.deployProxy(STAKING, [await azur.getAddress(), UNSTAKEPERIOD]);
     await staking.waitForDeployment();
     const stakingAddress = await staking.getAddress();
 
@@ -61,6 +64,16 @@ describe("Staking", function () {
       // last staker add second stake
       resStakes.push({ stake: await makeStakeFor(staking, users[2], BASE_STAKE), staker: users[2] });
 
+      for (const i of resStakes) await makeRequestUnstake(staking, i.staker, i.stake.stakeId);
+
+      for (const i of resStakes)
+        await expect(makeUnstake(staking, i.staker, i.stake.stakeId)).to.be.revertedWithCustomError(
+          staking,
+          "IncorrectUnstakeTime()"
+        );
+
+      await timeShiftBy(ethers, UNSTAKEPERIOD);
+
       for (const i of resStakes) {
         resUnstake = await makeUnstake(staking, i.staker, i.stake.stakeId);
         await timeShiftBy(ethers, ONE_DAY);
@@ -83,9 +96,11 @@ describe("Staking", function () {
 
       await makeDistributeReward(staking, owner, BASE_REWARD);
 
+      for (const i of resStakes) await makeRequestUnstake(staking, i.staker, i.stake.stakeId);
+      await timeShiftBy(ethers, UNSTAKEPERIOD);
+
       for (const i of resStakes) {
         expect((await makeUnstake(staking, i.staker, i.stake.stakeId)).amount).to.be.eq(BASE_STAKE);
-
         gain = (await azur.balanceOf(i.staker.address)) - BASE_DEPO;
         balancesGains.push(gain);
         totalRewards += gain;
@@ -136,7 +151,7 @@ describe("Staking", function () {
       expect(totalRewards).to.be.closeTo(BASE_REWARD, 1);
       for (let i = 0; i < withdrawals.length - 1; i++) expect(withdrawals[i].reward).eq(withdrawals[i + 1].reward);
     });
-    it("Get 3 equal stakes from one staker, add reward, withdraw stakes with rewards depends of time", async function () {
+    it("Get 3 equal stakes from one staker, add reward, withdraw rewards depends of time", async function () {
       const { staking, owner, users } = await loadFixture(deployDistributorFixture);
       let resStakes = [];
       let resUnstakes = [];
@@ -152,7 +167,7 @@ describe("Staking", function () {
       await makeDistributeReward(staking, owner, BASE_REWARD);
 
       for (const i of resStakes) {
-        unstaked = await makeUnstake(staking, user, i.stakeId);
+        unstaked = await makeRequestUnstake(staking, user, i.stakeId);
         await timeShiftBy(ethers, ONE_SECOND);
 
         resUnstakes.push(unstaked);
@@ -177,9 +192,18 @@ describe("Staking", function () {
       await timeShiftBy(ethers, ONE_DAY);
 
       // second staker withdraw
+      await makeRequestUnstake(staking, resStakes[1].staker, resStakes[1].stake.stakeId);
+      await timeShiftBy(ethers, UNSTAKEPERIOD);
       expect((await makeUnstake(staking, resStakes[1].staker, resStakes[1].stake.stakeId)).amount).to.be.eq(BASE_STAKE);
 
       await makeDistributeReward(staking, owner, BASE_REWARD);
+
+      for (const i of resStakes) {
+        // exclude second staker
+        if (i.staker == resStakes[1].staker) continue;
+        await makeRequestUnstake(staking, i.staker, i.stake.stakeId);
+      }
+      await timeShiftBy(ethers, UNSTAKEPERIOD);
 
       for (const i of resStakes) {
         // exclude second staker
