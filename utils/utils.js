@@ -18,14 +18,14 @@ async function timeShiftBy(ethers, timeDelta) {
   await network.provider.send("evm_mine");
 }
 
-const makeStakeFor = async (staking, staker, amount) => {
-  await staking.connect(staker).stakeFor(amount);
-  return await getStakeForDetails(staking);
+const makeStakeFor = async (rewardPool, staker, amount) => {
+  await rewardPool.connect(staker).stakeFor(amount);
+  return await getStakeForDetails(rewardPool);
 };
 
-const getStakeForDetails = async (staking) => {
-  let filter = staking.filters.Staked;
-  let e = (await staking.queryFilter(filter, -1))[0].args;
+const getStakeForDetails = async (rewardPool) => {
+  let filter = rewardPool.filters.Staked;
+  let e = (await rewardPool.queryFilter(filter, -1))[0].args;
   return {
     stakeId: e.stakeId,
     staker: e.staker,
@@ -33,16 +33,16 @@ const getStakeForDetails = async (staking) => {
   };
 };
 
-const makeRequestUnstake = async (staking, staker, stakeId) => {
-  await staking.connect(staker).requestUnstake(stakeId);
-  return await getRequestUnstakeDetails(staking);
+const makeRequestUnstake = async (rewardPool, staker, stakeId) => {
+  await rewardPool.connect(staker).requestUnstake(stakeId);
+  return await getRequestUnstakeDetails(rewardPool);
 };
 
-const getRequestUnstakeDetails = async (staking) => {
-  let filter = staking.filters.UnstakeRequested;
-  let filterReward = staking.filters.RewardWithdrawn;
-  let e = (await staking.queryFilter(filter, -1))[0].args;
-  let eReward = (await staking.queryFilter(filterReward, -1))[0].args;
+const getRequestUnstakeDetails = async (rewardPool) => {
+  let filter = rewardPool.filters.UnstakeRequested;
+  let filterReward = rewardPool.filters.RewardWithdrawn;
+  let e = (await rewardPool.queryFilter(filter, -1))[0].args;
+  let eReward = (await rewardPool.queryFilter(filterReward, -1))[0].args;
   return {
     stakeId: e.stakeId,
     staker: e.staker,
@@ -51,14 +51,14 @@ const getRequestUnstakeDetails = async (staking) => {
   };
 };
 
-const makeUnstake = async (staking, staker, stakeId) => {
-  await staking.connect(staker).unstake(stakeId);
-  return await getUnstakeDetails(staking);
+const makeUnstake = async (rewardPool, staker, stakeId) => {
+  await rewardPool.connect(staker).unstake(stakeId);
+  return await getUnstakeDetails(rewardPool);
 };
 
-const getUnstakeDetails = async (staking) => {
-  let filter = staking.filters.Unstaked;
-  let e = (await staking.queryFilter(filter, -1))[0].args;
+const getUnstakeDetails = async (rewardPool) => {
+  let filter = rewardPool.filters.Unstaked;
+  let e = (await rewardPool.queryFilter(filter, -1))[0].args;
   return {
     stakeId: e.stakeId,
     staker: e.staker,
@@ -66,31 +66,44 @@ const getUnstakeDetails = async (staking) => {
   };
 };
 
-const makeDistributeReward = async (staking, owner, reward) => {
-  await staking.connect(owner).distributeReward(reward);
-  return await getDistributeRewardDetails(staking);
+const makeDistributeReward = async (rewardPool, owner, reward) => {
+  await rewardPool.connect(owner).distributeReward(reward);
+  return await getDistributeRewardDetails(rewardPool);
 };
 
-const getDistributeRewardDetails = async (staking) => {
-  let filter = staking.filters.RewardDistributed;
-  let e = (await staking.queryFilter(filter, -1))[0].args;
+const getDistributeRewardDetails = async (rewardPool) => {
+  let filter = rewardPool.filters.RewardDistributed;
+  let e = (await rewardPool.queryFilter(filter, -1))[0].args;
   return {
     reward: e.reward,
     fee: e.fee,
   };
 };
 
-const makeWithdrawReward = async (staking, staker, stakeId) => {
-  await staking.connect(staker).withdrawReward(stakeId);
-  return await getWithdrawRewardDetails(staking);
+const makeWithdrawReward = async (rewardPool, staker, stakeId) => {
+  await rewardPool.connect(staker).withdrawReward(stakeId);
+  return await getWithdrawRewardDetails(rewardPool);
 };
 
-const getWithdrawRewardDetails = async (staking) => {
-  let filter = staking.filters.RewardWithdrawn;
-  let e = (await staking.queryFilter(filter, -1))[0].args;
+const getWithdrawRewardDetails = async (rewardPool) => {
+  let filter = rewardPool.filters.RewardWithdrawn;
+  let e = (await rewardPool.queryFilter(filter, -1))[0].args;
   return {
     stakeId: e.stakeId,
     reward: e.reward,
+  };
+};
+
+const makeChangeUnstakePeriod = async (rewardPool, owner, newUnstakePeriod) => {
+  await rewardPool.connect(owner).changeUnstakePeriod(newUnstakePeriod);
+  return await getChangeUnstakePeriodDetails(rewardPool);
+};
+
+const getChangeUnstakePeriodDetails = async (rewardPool) => {
+  let filter = rewardPool.filters.UnstakePeriodChanged;
+  let e = (await rewardPool.queryFilter(filter, -1))[0].args;
+  return {
+    newUnstakePeriod: e.newUnstakePeriod,
   };
 };
 
@@ -107,4 +120,6 @@ module.exports = {
   makeDistributeReward,
   makeWithdrawReward,
   getWithdrawRewardDetails,
+  makeChangeUnstakePeriod,
+  getChangeUnstakePeriodDetails,
 };

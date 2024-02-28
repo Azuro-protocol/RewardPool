@@ -2,7 +2,7 @@
 
 pragma solidity 0.8.24;
 
-interface IStaking {
+interface IRewardPool {
     /** @notice Structure describing one reward distribution for node */
     struct Distribution {
         uint256 rewardPerPower;

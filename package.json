@@ -24,13 +24,14 @@
     "chai": "^4.2.0",
     "ethers": "^6.4.0",
     "hardhat-gas-reporter": "^1.0.10",
-    "solidity-coverage": "^0.8.0",
+    "solidity-coverage": "^0.8.9",
     "typechain": "^8.3.0"
   },
   "scripts": {
     "compile": "npx hardhat compile",
     "test": "npx hardhat test",
     "prettier-sol": "npx prettier --write \"contracts/**/*.sol\"",
-    "prettier-js": "npx prettier --write {test,utils}/*.js --print-width 120 --tab-width 2"
+    "prettier-js": "npx prettier --write {test,utils}/*.js --print-width 120 --tab-width 2",
+    "coverage": "npx hardhat coverage"
   }
 }

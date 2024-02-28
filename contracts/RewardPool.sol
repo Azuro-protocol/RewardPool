@@ -6,14 +6,14 @@ import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/math/SafeCast.sol";
-import "./interface/IStaking.sol";
+import "./interface/IRewardPool.sol";
 
 /*
-This contract is used for distributing staking rewards for staking to various nodes.
+This contract is used for distributing rewardPool rewards for rewardPool to various nodes.
 At each rewards distribution for given node, they are distributed proportionate to "stake powers".
 
 Stake power for a given stake is a value calculated following way:
-1. At first distribution (after staking) it is share of stake amount equal to share of time passed between stake 
+1. At first distribution (after rewardPool) it is share of stake amount equal to share of time passed between stake 
 and this distribution to time passed between previous distribution and this distribution. This is named partial power.
 2. At subsequent distributions stake power is equal to staked amount. This is named full power.
 
@@ -34,33 +34,23 @@ For correct calculation of sum of powerXTimes we calculate it as difference of m
 Such way allows to calculate all values using O(1) of operations in one transaction
 */
 
-contract Staking is OwnableUpgradeable, IStaking {
+contract RewardPool is OwnableUpgradeable, IRewardPool {
     using SafeERC20 for IERC20;
     using SafeCast for uint256;
 
-    /**
-     * @notice Magnitude by which values are multiplied in reward calculations
-     */
+    /** @notice Magnitude by which values are multiplied in reward calculations */
     uint256 private constant MAGNITUDE = type(uint128).max;
 
-    /**
-     * @notice Token user in staking
-     */
+    /** @notice Token user in rewardPool */
     IERC20 public token;
 
-    /**
-     * @notice Mapping of distribution ID's to their information
-     */
+    /** @notice Mapping of distribution ID's to their information */
     mapping(uint32 => Distribution) public distributions;
 
-    /**
-     * @notice Mapping of stake ID's to their information
-     */
+    /** @notice Mapping of stake ID's to their information */
     mapping(uint256 => Stake) public stakes;
 
-    /**
-     * @notice Mapping of stake ID's to their information requested to be unstaked
-     */
+    /** @notice Mapping of stake ID's to their information requested to be unstaked */
     mapping(uint256 => Unstake) public unstakes;
 
     uint256 public lastStakeId;
@@ -71,7 +61,7 @@ contract Staking is OwnableUpgradeable, IStaking {
 
     /**
      * @notice Contract's initializer
-     * @param token_ Contract of token used in staking
+     * @param token_ Contract of token used in rewardPool
      */
     function initialize(
         IERC20 token_,
