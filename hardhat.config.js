@@ -3,7 +3,6 @@ require("@openzeppelin/hardhat-upgrades");
 require("hardhat-contract-sizer");
 require("hardhat-gas-reporter");
 
-/** @type import('hardhat/config').HardhatUserConfig */
 module.exports = {
   solidity: {
     compilers: [
@@ -11,8 +10,8 @@ module.exports = {
         version: "0.8.24",
         settings: {
           optimizer: {
-            enabled: false,
-            runs: 2,
+            enabled: true,
+            runs: 1000000,
           },
         },
       },

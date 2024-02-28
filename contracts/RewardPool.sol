@@ -136,9 +136,12 @@ contract RewardPool is OwnableUpgradeable, IRewardPool {
      * @return stakeId ID of the created stake
      */
     function stakeFor(uint96 amount) external returns (uint256 stakeId) {
+        token.safeTransferFrom(msg.sender, address(this), amount);
+
         // This stake's first distribution will be next distribution
         uint32 distributionId = lastDistributionId + 1;
 
+        totalStaked += amount;
         stakeId = ++lastStakeId;
         stakes[stakeId] = Stake({
             owner: msg.sender,
@@ -148,18 +151,15 @@ contract RewardPool is OwnableUpgradeable, IRewardPool {
             withdrawnReward: 0
         });
 
-        totalStaked += amount;
+        Distribution storage distribution = distributions[distributionId];
 
         // Amount staked in current distribution is stored to calculate total reward for partial power in future
-        distributions[distributionId].stakedIn += amount;
+        distribution.stakedIn += amount;
 
         // Sum of powerXTimeDeltas is increased
         uint256 timeDelta = block.timestamp -
             distributions[distributionId - 1].time;
-        distributions[distributionId].powerXTimeDelta += (timeDelta * amount)
-            .toUint160();
-
-        token.safeTransferFrom(msg.sender, address(this), amount);
+        distribution.powerXTimeDelta += (timeDelta * amount).toUint160();
 
         emit Staked(stakeId, msg.sender, amount);
     }

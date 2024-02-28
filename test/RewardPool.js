@@ -127,12 +127,11 @@ describe("RewardPool", function () {
       for (let i = 0; i < balancesGains.length - 1; i++) expect(balancesGains[i]).gt(balancesGains[i + 1]);
     });
     it("Get equal stakes from 3 stakers, add reward, withdraw rewards, second reward, check equality rewards", async function () {
-      const { rewardPool, azur, owner, users } = await loadFixture(deployDistributorFixture);
+      const { rewardPool, owner, users } = await loadFixture(deployDistributorFixture);
       let resStakes = [];
       let resUnstakes = [];
       let withdrawals = [];
-      let unstaked,
-        withdrawn,
+      let withdrawn,
         totalRewards = 0n;
 
       for (const i of users) {
@@ -211,10 +210,7 @@ describe("RewardPool", function () {
       const { rewardPool, azur, owner, users } = await loadFixture(deployDistributorFixture);
       let resStakes = [];
       let stakeList = [];
-      let resUnstakes = [];
-      let unstaked,
-        totalRewards = 0n,
-        user = users[0];
+      let user = users[0];
 
       for (const i of Array(3).keys()) {
         resStakes.push(await makeStakeFor(rewardPool, user, BASE_STAKE));
