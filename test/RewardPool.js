@@ -6,6 +6,7 @@ const {
   tokens,
   getBlockTime,
   timeShiftBy,
+  deployRewardPool,
   makeStakeFor,
   makeUnstake,
   makeRequestUnstake,
@@ -33,10 +34,7 @@ describe("RewardPool", function () {
     const azur = await AZUR.deploy("AZUR", "AZUR", INIT_MINT);
     await azur.waitForDeployment();
 
-    const REWARDPOOL = await ethers.getContractFactory("RewardPool", { signer: owner });
-
-    const rewardPool = await upgrades.deployProxy(REWARDPOOL, [await azur.getAddress(), UNSTAKEPERIOD]);
-    await rewardPool.waitForDeployment();
+    const rewardPool = await deployRewardPool(azur, owner, UNSTAKEPERIOD);
     const rewardPoolAddress = await rewardPool.getAddress();
 
     await azur.connect(owner).approve(rewardPoolAddress, INIT_MINT);

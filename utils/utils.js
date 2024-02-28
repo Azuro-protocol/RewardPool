@@ -1,6 +1,27 @@
 const hre = require("hardhat");
 const { ethers } = require("hardhat");
 
+function getTimeout(chainId) {
+  let timeout;
+  switch (chainId) {
+    case "0x2a":
+      timeout = 8000;
+      break; // Kovan
+    case "0x4d":
+      timeout = 35000;
+      break; // Sokol
+    case "0x7a69":
+      timeout = 800;
+      break; // Hardhat
+    default:
+      timeout = 20000;
+  }
+
+  return () => {
+    return new Promise((resolve) => setTimeout(resolve, timeout));
+  };
+}
+
 function tokens(val) {
   return BigInt(val) * 10n ** 18n;
 }
@@ -17,6 +38,13 @@ async function timeShiftBy(ethers, timeDelta) {
   await network.provider.send("evm_setNextBlockTimestamp", [time]);
   await network.provider.send("evm_mine");
 }
+
+const deployRewardPool = async (azur, owner, unstakedPeriod) => {
+  const REWARDPOOL = await ethers.getContractFactory("RewardPool", { signer: owner });
+  const rewardPool = await upgrades.deployProxy(REWARDPOOL, [await azur.getAddress(), unstakedPeriod]);
+  await rewardPool.waitForDeployment();
+  return rewardPool;
+};
 
 const makeStakeFor = async (rewardPool, staker, amount) => {
   await rewardPool.connect(staker).stakeFor(amount);
@@ -109,9 +137,11 @@ const getChangeUnstakePeriodDetails = async (rewardPool) => {
 
 module.exports = {
   tokens,
+  getTimeout,
   getBlockTime,
   timeShiftBy,
   makeStakeFor,
+  deployRewardPool,
   getStakeForDetails,
   makeUnstake,
   getUnstakeDetails,
