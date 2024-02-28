@@ -207,6 +207,32 @@ describe("RewardPool", function () {
       expect(totalRewards).to.be.closeTo(BASE_REWARD, 1);
       for (let i = 0; i < resUnstakes.length - 1; i++) expect(resUnstakes[i].reward).gt(resUnstakes[i + 1].reward);
     });
+    it("Get 3 equal stakes from one staker, add reward, batch withdraw rewards, batch unstake", async function () {
+      const { rewardPool, azur, owner, users } = await loadFixture(deployDistributorFixture);
+      let resStakes = [];
+      let stakeList = [];
+      let resUnstakes = [];
+      let unstaked,
+        totalRewards = 0n,
+        user = users[0];
+
+      for (const i of Array(3).keys()) {
+        resStakes.push(await makeStakeFor(rewardPool, user, BASE_STAKE));
+        await timeShiftBy(ethers, ONE_DAY);
+      }
+
+      for (const i of resStakes) stakeList.push(i.stakeId);
+
+      await makeDistributeReward(rewardPool, owner, BASE_REWARD);
+
+      let balanceBefore = await azur.balanceOf(user.address);
+      await rewardPool.connect(user).batchWithdrawReward(stakeList);
+      expect((await azur.balanceOf(user.address)) - balanceBefore).to.be.closeTo(BASE_REWARD, 1);
+
+      await rewardPool.connect(user).batchRequestUnstake(stakeList);
+      await timeShiftBy(ethers, ONE_WEEK);
+      await rewardPool.connect(user).batchUnstake(stakeList);
+    });
     it("Get equal stakes from 3 stakers, second staker withdrawn, add reward, withdraw stakes with rewards", async function () {
       const { rewardPool, azur, owner, users } = await loadFixture(deployDistributorFixture);
       let resStakes = [];
