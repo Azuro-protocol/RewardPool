@@ -1,2 +1,2 @@
 # distributor
-Azuro staking and reward distribution
+Azuro rewardPool and reward distribution
