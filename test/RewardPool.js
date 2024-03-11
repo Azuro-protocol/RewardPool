@@ -51,6 +51,14 @@ describe("RewardPool", function () {
       const { rewardPool, azur } = await loadFixture(deployDistributorFixture);
       await expect(rewardPool.initialize(azur, 0)).to.be.revertedWithCustomError(rewardPool, "InvalidInitialization()");
     });
+    it("Try large unstake period", async function () {
+      const { rewardPool, azur, owner } = await loadFixture(deployDistributorFixture);
+      const MONTH = 60 * 60 * 24 * 30;
+      await expect(rewardPool.connect(owner).changeUnstakePeriod(MONTH + 1)).to.be.revertedWithCustomError(
+        rewardPool,
+        "MaxUnstakePeriodExceeded()"
+      );
+    });
     it("Should set the right owner", async function () {
       const { rewardPool, owner } = await loadFixture(deployDistributorFixture);
       expect(await rewardPool.owner()).to.equal(owner.address);

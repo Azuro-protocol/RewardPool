@@ -41,6 +41,9 @@ contract RewardPool is OwnableUpgradeable, IRewardPool {
     /** @notice Magnitude by which values are multiplied in reward calculations */
     uint256 private constant MAGNITUDE = type(uint128).max;
 
+    /** @notice Maximum unstake period is the limit of configurable unstake period and can be 30 days */
+    uint256 public constant MAXUNSTAKEPERIOD = 30 days;
+
     /** @notice Token user in rewardPool */
     IERC20 public token;
 
@@ -78,6 +81,8 @@ contract RewardPool is OwnableUpgradeable, IRewardPool {
      * @param newUnstakePeriod new unstake period, will be actual for new unstake requests
      */
     function changeUnstakePeriod(uint256 newUnstakePeriod) external onlyOwner {
+        if (newUnstakePeriod > MAXUNSTAKEPERIOD)
+            revert MaxUnstakePeriodExceeded();
         unstakePeriod = newUnstakePeriod;
         emit UnstakePeriodChanged(newUnstakePeriod);
     }
