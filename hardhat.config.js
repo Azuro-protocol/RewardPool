@@ -35,6 +35,7 @@ module.exports = {
       },
     ],
   },
+  paths: {sources: "./contracts/hardhat/contracts"},
   defaultNetwork: "hardhat",
   networks: exportNetworks,
   contractSizer: {

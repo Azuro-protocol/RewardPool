@@ -2,10 +2,10 @@
 pragma solidity ^0.8.13;
 
 import {Test, console} from "forge-std/Test.sol";
-import {RewardPool} from "../../contracts/RewardPool.sol";
-import {IRewardPool} from "../../contracts/interface/IRewardPool.sol";
-import {TestERC20} from "../../contracts/mocks/TestToken.sol";
-import {OwnerMock} from "../../contracts/mocks/OwnerMock.sol";
+import {RewardPool} from "../../contracts/hardhat/contracts/RewardPool.sol";
+import {IRewardPool} from "../../contracts/hardhat/contracts/interface/IRewardPool.sol";
+import {TestERC20} from "../../contracts/hardhat/contracts/mocks/TestToken.sol";
+import {OwnerMock} from "../../contracts/forge/mocks/OwnerMock.sol";
 import {Upgrades} from "openzeppelin-foundry-upgrades/Upgrades.sol";
 
 error InvalidInitialization();

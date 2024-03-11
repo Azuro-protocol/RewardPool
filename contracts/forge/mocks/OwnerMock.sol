@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-import {RewardPool} from "../RewardPool.sol";
-import {TestERC20} from "./TestToken.sol";
+import {RewardPool} from "../../hardhat/contracts/RewardPool.sol";
+import {TestERC20} from "../../hardhat/contracts/mocks/TestToken.sol";
 import {Upgrades} from "@openzeppelin/foundry-upgrades/Upgrades.sol";
 
 contract OwnerMock {
@@ -15,11 +15,13 @@ contract OwnerMock {
     constructor() {
         token = new TestERC20("AZUR", "AZUR", INIT_MINT);
 
-        pool = RewardPool(Upgrades.deployTransparentProxy(
-            "RewardPool.sol",
-            address(this), // owner
-            abi.encodeCall(RewardPool.initialize, (token, UNSTAKE_PERIOD))
-        ));
+        pool = RewardPool(
+            Upgrades.deployTransparentProxy(
+                "RewardPool.sol",
+                address(this), // owner
+                abi.encodeCall(RewardPool.initialize, (token, UNSTAKE_PERIOD))
+            )
+        );
         token.approve(address(pool), 2 ** 256 - 1);
     }
 
