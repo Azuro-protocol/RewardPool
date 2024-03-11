@@ -63,4 +63,5 @@ interface IRewardPool {
     error NotStakeOwner();
     error IncorrectUnstake();
     error IncorrectUnstakeTime();
+    error MaxUnstakePeriodExceeded();
 }
