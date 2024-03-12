@@ -62,6 +62,11 @@ contract RewardPool is OwnableUpgradeable, IRewardPool {
     uint256 public rewardPerPower;
     uint256 public unstakePeriod;
 
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
     /**
      * @notice Contract's initializer
      * @param token_ Contract of token used in rewardPool
