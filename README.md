@@ -1,29 +1,20 @@
-# distributor
-Azuro rewardPool and reward distribution
+#  Azuro Reward Pool
 
-## Description
-This contract is used for distributing rewards for rewardPool to various stakers.
-At each rewards distribution, it is distributed proportionate to "stake powers".
+This contract facilitates the distribution of rewards from the reward pool to various stakers. 
+During each rewards distribution cycle, rewards are distributed proportionally based on "stake powers".
 
-Stake power for a given stake is a value calculated following way:
-1. At first distribution (after rewardPool) it is share of stake amount equal to share of time passed between stake 
-and this distribution to time passed between previous distribution and this distribution. This is named partial power.
-2. At subsequent distributions stake power is equal to staked amount. This is named full power.
+The stake power for a given stake is calculated as follows:
+1. During the initial distribution (following the establishment of the reward pool), it is determined by the proportion of the stake amount relative to the time elapsed between the stake and the current distribution, compared to the time elapsed between the previous distribution and the current one. This is referred to as partial power.
+2. In subsequent distributions, the stake power equals the staked amount, referred to as full power.
 
-Therefore, reward calculations are split into 2 parts: for full stakes and for partial stakes.
+Consequently, reward calculations are divided into two parts: for **full stakes** and for **partial stakes**.
 
-Calculations for full stakes is going through increasing "rewardPerPower" value 
-(that equals to total accrued reward per 1 unit of power, then magnified by MAGNITUDE to calculate small values correct)
-Therefore for a stake reward for periods where it was full is it's amount multiplied by difference of current rewardPerPower and value of rewardPerPower at distribution where stake happened (first distribution)
+Calculations for full stakes involve incrementally increasing the `rewardPerPower` value. This value represents the total accrued reward per unit of power, magnified by a `MAGNITUDE` factor to ensure accurate calculation of small values. Therefore, for a stake, the reward for periods where it was fully staked is computed as its amount multiplied by the difference between the current `rewardPerPower` and the value of `rewardPerPower` at the distribution when the stake occurred (the first distribution).
 
-To calculate partial stake reward (happenes only 1 for each stake) other mechanism is used.
-At first distribution share of reward for given stake among all rewards for partial stakes in that distribution
-is equal to share of product of stake amount and time passed between stake and distribution to sum of such products
-for all partial stakes. These products are named "powerXTime" in the codebase;
-For correct calculation of sum of powerXTimes we calculate it as difference of maxTotalPowerXTime 
-(sum of powerXTimes if all partial stakes were immediately after previous distribution) and sum of powerXTime deltas
-(differences between maximal possible powerXTime and real powerXTime for each stake).
-Such way allows to calculate all values using O(1) of operations in one transaction
+To calculate the reward for partial stakes (which only occurs once for each stake), a different mechanism is employed. During the initial distribution, the share of the reward for a given stake among all rewards for partial stakes in that distribution is determined by the proportion of the product of the stake amount and the time elapsed between the stake and the distribution, relative to the sum of such products for all partial stakes. These products are referred to as `powerXTime` in the codebase.
+For the accurate calculation of the sum of `powerXTimes`, it is calculated as the difference between `maxTotalPowerXTime` (the sum of powerXTimes if all partial stakes were immediately after the previous distribution) and the sum of powerXTime deltas (the differences between the maximal possible `powerXTime` and the real `powerXTime` for each stake).  
+
+This approach enables the calculation of all values using O(1) operations in a single transaction.
 
 ## Deployment
 
@@ -35,7 +26,7 @@ Before start deployment you need to set `.env` variables:
 
 
 ### 2. Configure network in hardhat.config.js
-Set %netwok% connection configuration
+Set netwok connection configuration
 
 ### 3. Run deploy script
 
