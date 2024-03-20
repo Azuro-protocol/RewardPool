@@ -9,8 +9,8 @@ import "@openzeppelin/contracts/utils/math/SafeCast.sol";
 import "./interface/IRewardPool.sol";
 
 /*
-This contract is used for distributing rewardPool rewards for rewardPool to various nodes.
-At each rewards distribution for given node, they are distributed proportionate to "stake powers".
+This contract is used for distributing rewards for rewardPool to various stakers.
+At each rewards distribution, it is distributed proportionate to "stake powers".
 
 Stake power for a given stake is a value calculated following way:
 1. At first distribution (after rewardPool) it is share of stake amount equal to share of time passed between stake 
@@ -19,10 +19,9 @@ and this distribution to time passed between previous distribution and this dist
 
 Therefore, reward calculations are split into 2 parts: for full stakes and for partial stakes.
 
-Calculations for full stakes is node through increasing node's "rewardPerPower" value 
+Calculations for full stakes is going through increasing "rewardPerPower" value 
 (that equals to total accrued reward per 1 unit of power, then magnified by MAGNITUDE to calculate small values correct)
-Therefore for a stake reward for periods where it was full is it's amount multiplied by difference of
-node's current rewardPerPower and value of rewardPerPower at distribution where stake happened (first distribution)
+Therefore for a stake reward for periods where it was full is it's amount multiplied by difference of current rewardPerPower and value of rewardPerPower at distribution where stake happened (first distribution)
 
 To calculate partial stake reward (happenes only 1 for each stake) other mechanism is used.
 At first distribution share of reward for given stake among all rewards for partial stakes in that distribution
@@ -200,7 +199,7 @@ contract RewardPool is OwnableUpgradeable, IRewardPool {
     }
 
     /**
-     *  @notice Internal function that processes reward distribution for one node
+     *  @notice Internal function that processes reward distribution
      *  @param reward Distributed reward
      */
     function _distributeReward(uint256 reward) private {
