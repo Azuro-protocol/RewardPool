@@ -39,9 +39,9 @@ async function timeShiftBy(ethers, timeDelta) {
   await network.provider.send("evm_mine");
 }
 
-const deployRewardPool = async (azur, owner, unstakedPeriod) => {
+const deployRewardPool = async (azurAddress, owner, unstakedPeriod) => {
   const REWARDPOOL = await ethers.getContractFactory("RewardPool", { signer: owner });
-  const rewardPool = await upgrades.deployProxy(REWARDPOOL, [await azur.getAddress(), unstakedPeriod]);
+  const rewardPool = await upgrades.deployProxy(REWARDPOOL, [azurAddress, unstakedPeriod]);
   await rewardPool.waitForDeployment();
   return rewardPool;
 };
