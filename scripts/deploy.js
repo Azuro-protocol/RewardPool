@@ -13,7 +13,6 @@ async function main() {
   let summary = {};
 
   console.log("Deployer wallet:", deployer.address);
-  console.log("Deployer balance:", (await deployer.getBalance()).toString());
 
   const chainId = await hre.network.provider.send("eth_chainId");
   const timeout = getTimeout(chainId);
@@ -21,7 +20,6 @@ async function main() {
   const rewardPool = await deployRewardPool(AZUR, deployer, UNSTAKEPERIOD);
 
   await timeout();
-  summary["rewardPool"] = roleIds;
   summary["UNSTAKEPERIOD"] = UNSTAKEPERIOD;
 
   console.log("Reward settings:", JSON.stringify(summary));

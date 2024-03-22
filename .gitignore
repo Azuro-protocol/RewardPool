@@ -1,6 +1,7 @@
 node_modules
 .env
 .vscode
+.openzeppelin
 
 # Hardhat files
 /cache
