@@ -276,15 +276,17 @@ contract RewardPool is OwnableUpgradeable, IRewardPool {
             distributions[distributionId].powerXTimeDelta -= timeDelta * amount;
         }
 
+        uint256 unstakeTime = block.timestamp + unstakePeriod;
+
         unstakes[stakeId] = Unstake({
             owner: msg.sender,
             amount: amount,
-            time: (block.timestamp + unstakePeriod).toUint64()
+            time: unstakeTime.toUint64()
         });
 
         delete stakes[stakeId];
 
-        emit UnstakeRequested(stakeId, msg.sender, amount);
+        emit UnstakeRequested(stakeId, msg.sender, amount, unstakeTime);
     }
 
     /**

@@ -43,7 +43,8 @@ interface IRewardPool {
     event UnstakeRequested(
         uint256 indexed stakeId,
         address indexed staker,
-        uint256 amount
+        uint256 amount,
+        uint256 time
     );
 
     /** @notice Event emitted when some stake is withdrawn */
