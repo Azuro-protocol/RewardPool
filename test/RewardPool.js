@@ -1,10 +1,8 @@
-const { time, loadFixture } = require("@nomicfoundation/hardhat-toolbox/network-helpers");
-const { anyValue } = require("@nomicfoundation/hardhat-chai-matchers/withArgs");
+const { loadFixture } = require("@nomicfoundation/hardhat-toolbox/network-helpers");
 const { expect } = require("chai");
 
 const {
   tokens,
-  getBlockTime,
   timeShiftBy,
   deployRewardPool,
   makeStakeFor,
@@ -14,7 +12,6 @@ const {
   makeWithdrawReward,
   makeChangeUnstakePeriod,
 } = require("../utils/utils");
-const { Log } = require("ethers");
 
 const INIT_MINT = tokens("100000");
 const BASE_STAKE = tokens("100");
@@ -23,6 +20,7 @@ const BASE_DEPO = BASE_STAKE * 10n;
 const ONE_SECOND = 1;
 const ONE_DAY = 60 * 60 * 24;
 const ONE_WEEK = ONE_DAY * 7;
+const ONE_MONTH = ONE_DAY * 30;
 const UNSTAKEPERIOD = ONE_WEEK;
 
 describe("RewardPool", function () {
@@ -52,9 +50,8 @@ describe("RewardPool", function () {
       await expect(rewardPool.initialize(azur, 0)).to.be.revertedWithCustomError(rewardPool, "InvalidInitialization()");
     });
     it("Try large unstake period", async function () {
-      const { rewardPool, azur, owner } = await loadFixture(deployDistributorFixture);
-      const MONTH = 60 * 60 * 24 * 30;
-      await expect(rewardPool.connect(owner).changeUnstakePeriod(MONTH + 1)).to.be.revertedWithCustomError(
+      const { rewardPool, owner } = await loadFixture(deployDistributorFixture);
+      await expect(rewardPool.connect(owner).changeUnstakePeriod(ONE_MONTH + 1)).to.be.revertedWithCustomError(
         rewardPool,
         "MaxUnstakePeriodExceeded()"
       );
@@ -98,6 +95,38 @@ describe("RewardPool", function () {
         expect(resUnstake.amount).to.be.eq(BASE_STAKE);
       }
     });
+    it("Get equal stakes for 3 stakers, withdraw stakes", async function () {
+      const { rewardPool, azur, users, owner } = await loadFixture(deployDistributorFixture);
+      let resStakes = [];
+      let resUnstake;
+
+      for (const i of users) {
+        const balanceBefore = await azur.balanceOf(owner.address);
+        resStakes.push({ stake: await makeStakeFor(rewardPool, owner, BASE_STAKE, (recipient = i)), staker: i });
+        expect(await azur.balanceOf(owner.address)).to.be.equal(balanceBefore - BASE_STAKE);
+
+        await timeShiftBy(ethers, ONE_DAY);
+      }
+
+      // last staker add second stake
+      resStakes.push({ stake: await makeStakeFor(rewardPool, users[2], BASE_STAKE), staker: users[2] });
+
+      for (const i of resStakes) await makeRequestUnstake(rewardPool, i.staker, i.stake.stakeId);
+
+      for (const i of resStakes)
+        await expect(makeUnstake(rewardPool, i.staker, i.stake.stakeId)).to.be.revertedWithCustomError(
+          rewardPool,
+          "IncorrectUnstakeTime()"
+        );
+
+      await timeShiftBy(ethers, UNSTAKEPERIOD);
+
+      for (const i of resStakes) {
+        resUnstake = await makeUnstake(rewardPool, i.staker, i.stake.stakeId);
+        await timeShiftBy(ethers, ONE_DAY);
+        expect(resUnstake.amount).to.be.eq(BASE_STAKE);
+      }
+    });
     it("Get equal stakes from 3 stakers, add reward, withdraw stakes", async function () {
       const { rewardPool, azur, owner, users } = await loadFixture(deployDistributorFixture);
       let resStakes = [];
@@ -112,7 +141,7 @@ describe("RewardPool", function () {
 
       await timeShiftBy(ethers, ONE_DAY);
 
-      // try distribute from not owner
+      // try to distribute from not owner
       await expect(makeDistributeReward(rewardPool, users[0], BASE_REWARD))
         .to.be.revertedWithCustomError(rewardPool, "OwnableUnauthorizedAccount")
         .withArgs(users[0].address);

@@ -46,8 +46,8 @@ const deployRewardPool = async (azurAddress, owner, unstakedPeriod) => {
   return rewardPool;
 };
 
-const makeStakeFor = async (rewardPool, staker, amount) => {
-  await rewardPool.connect(staker).stakeFor(amount);
+const makeStakeFor = async (rewardPool, staker, amount, recipient = staker) => {
+  await rewardPool.connect(staker).stakeFor(recipient.address, amount);
   return await getStakeForDetails(rewardPool);
 };
 
