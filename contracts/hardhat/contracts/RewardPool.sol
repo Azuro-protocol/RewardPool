@@ -139,8 +139,26 @@ contract RewardPool is OwnableUpgradeable, IRewardPool {
     }
 
     /**
+     * @notice Creates new stake for `msg.sender`.
+     * @dev Transfers `amount` of `token` from `msg.sender` to the contract, approval is required in prior
+     * @param amount Amount to stake
+     * @return stakeId ID of the created stake
+     */
+    function stake(uint96 amount) public returns (uint256 stakeId) {
+        stakeFor(msg.sender, amount);
+    }
+
+    /**
+     *  @notice Unstakes given stake (and collects reward in process)
+     *  @param stakeId ID of the stake to withdraw
+     */
+    function unstake(uint256 stakeId) external {
+        _unstake(stakeId);
+    }
+
+    /**
      * @notice Creates new stake for `account`.
-     * @dev Transfers `amount` of `token` to the contract, approval is required in prior
+     * @dev Transfers `amount` of `token` from `msg.sender` to the contract, approval is required in prior
      * @param account The owner of a stake
      * @param amount Amount to stake
      * @return stakeId ID of the created stake
@@ -148,7 +166,7 @@ contract RewardPool is OwnableUpgradeable, IRewardPool {
     function stakeFor(
         address account,
         uint96 amount
-    ) external returns (uint256 stakeId) {
+    ) public returns (uint256 stakeId) {
         token.safeTransferFrom(msg.sender, address(this), amount);
 
         // This stake's first distribution will be next distribution
@@ -175,14 +193,6 @@ contract RewardPool is OwnableUpgradeable, IRewardPool {
         distribution.powerXTimeDelta += (timeDelta * amount).toUint160();
 
         emit Staked(stakeId, account, amount);
-    }
-
-    /**
-     *  @notice Unstakes given stake (and collects reward in process)
-     *  @param stakeId ID of the stake to withdraw
-     */
-    function unstake(uint256 stakeId) external {
-        _unstake(stakeId);
     }
 
     /**
