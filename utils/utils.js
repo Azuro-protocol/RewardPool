@@ -46,12 +46,17 @@ const deployRewardPool = async (azurAddress, owner, unstakedPeriod) => {
   return rewardPool;
 };
 
-const makeStakeFor = async (rewardPool, staker, amount) => {
-  await rewardPool.connect(staker).stakeFor(amount);
-  return await getStakeForDetails(rewardPool);
+const makeStake = async (rewardPool, staker, amount) => {
+  await rewardPool.connect(staker).stake(amount);
+  return await getStakeDetails(rewardPool);
 };
 
-const getStakeForDetails = async (rewardPool) => {
+const makeStakeFor = async (rewardPool, staker, amount, recepient) => {
+  await rewardPool.connect(staker).stakeFor(recepient, amount);
+  return await getStakeDetails(rewardPool);
+};
+
+const getStakeDetails = async (rewardPool) => {
   let filter = rewardPool.filters.Staked;
   let e = (await rewardPool.queryFilter(filter, -1))[0].args;
   return {
@@ -140,9 +145,10 @@ module.exports = {
   getTimeout,
   getBlockTime,
   timeShiftBy,
+  makeStake,
   makeStakeFor,
   deployRewardPool,
-  getStakeForDetails,
+  getStakeDetails,
   makeUnstake,
   getUnstakeDetails,
   makeRequestUnstake,

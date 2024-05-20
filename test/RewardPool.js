@@ -1,12 +1,11 @@
-const { time, loadFixture } = require("@nomicfoundation/hardhat-toolbox/network-helpers");
-const { anyValue } = require("@nomicfoundation/hardhat-chai-matchers/withArgs");
+const { loadFixture } = require("@nomicfoundation/hardhat-toolbox/network-helpers");
 const { expect } = require("chai");
 
 const {
   tokens,
-  getBlockTime,
   timeShiftBy,
   deployRewardPool,
+  makeStake,
   makeStakeFor,
   makeUnstake,
   makeRequestUnstake,
@@ -14,7 +13,6 @@ const {
   makeWithdrawReward,
   makeChangeUnstakePeriod,
 } = require("../utils/utils");
-const { Log } = require("ethers");
 
 const INIT_MINT = tokens("100000");
 const BASE_STAKE = tokens("100");
@@ -52,7 +50,7 @@ describe("RewardPool", function () {
       await expect(rewardPool.initialize(azur, 0)).to.be.revertedWithCustomError(rewardPool, "InvalidInitialization()");
     });
     it("Try large unstake period", async function () {
-      const { rewardPool, azur, owner } = await loadFixture(deployDistributorFixture);
+      const { rewardPool, owner } = await loadFixture(deployDistributorFixture);
       const MONTH = 60 * 60 * 24 * 30;
       await expect(rewardPool.connect(owner).changeUnstakePeriod(MONTH + 1)).to.be.revertedWithCustomError(
         rewardPool,
@@ -76,11 +74,42 @@ describe("RewardPool", function () {
       let resUnstake;
 
       for (const i of users) {
-        resStakes.push({ stake: await makeStakeFor(rewardPool, i, BASE_STAKE), staker: i });
+        resStakes.push({ stake: await makeStake(rewardPool, i, BASE_STAKE), staker: i });
         await timeShiftBy(ethers, ONE_DAY);
       }
       // last staker add second stake
-      resStakes.push({ stake: await makeStakeFor(rewardPool, users[2], BASE_STAKE), staker: users[2] });
+      resStakes.push({ stake: await makeStake(rewardPool, users[2], BASE_STAKE), staker: users[2] });
+
+      for (const i of resStakes) await makeRequestUnstake(rewardPool, i.staker, i.stake.stakeId);
+
+      for (const i of resStakes)
+        await expect(makeUnstake(rewardPool, i.staker, i.stake.stakeId)).to.be.revertedWithCustomError(
+          rewardPool,
+          "IncorrectUnstakeTime()"
+        );
+
+      await timeShiftBy(ethers, UNSTAKEPERIOD);
+
+      for (const i of resStakes) {
+        resUnstake = await makeUnstake(rewardPool, i.staker, i.stake.stakeId);
+        await timeShiftBy(ethers, ONE_DAY);
+        expect(resUnstake.amount).to.be.eq(BASE_STAKE);
+      }
+    });
+    it("Get equal stakes for 3 stakers, withdraw stakes", async function () {
+      const { rewardPool, azur, users, owner } = await loadFixture(deployDistributorFixture);
+      let resStakes = [];
+      let resUnstake;
+
+      for (const i of users) {
+        const balanceBefore = await azur.balanceOf(owner.address);
+        resStakes.push({ stake: await makeStakeFor(rewardPool, owner, BASE_STAKE, i), staker: i });
+        expect(await azur.balanceOf(owner.address)).to.be.equal(balanceBefore - BASE_STAKE);
+
+        await timeShiftBy(ethers, ONE_DAY);
+      }
+
+      resStakes.push({ stake: await makeStakeFor(rewardPool, owner, BASE_STAKE, users[2]), staker: users[2] });
 
       for (const i of resStakes) await makeRequestUnstake(rewardPool, i.staker, i.stake.stakeId);
 
@@ -106,13 +135,16 @@ describe("RewardPool", function () {
         gain;
 
       for (const i of users) {
-        resStakes.push({ stake: await makeStakeFor(rewardPool, i, BASE_STAKE), staker: i });
+        const ownerBalance = await azur.balanceOf(owner.address);
+        resStakes.push({ stake: await makeStakeFor(rewardPool, owner, BASE_STAKE, i), staker: i });
+        expect(await azur.balanceOf(owner.address)).to.be.equal(ownerBalance - BASE_STAKE);
+
         await timeShiftBy(ethers, ONE_WEEK);
       }
 
       await timeShiftBy(ethers, ONE_DAY);
 
-      // try distribute from not owner
+      // try to distribute from not owner
       await expect(makeDistributeReward(rewardPool, users[0], BASE_REWARD))
         .to.be.revertedWithCustomError(rewardPool, "OwnableUnauthorizedAccount")
         .withArgs(users[0].address);
@@ -124,7 +156,7 @@ describe("RewardPool", function () {
 
       for (const i of resStakes) {
         expect((await makeUnstake(rewardPool, i.staker, i.stake.stakeId)).amount).to.be.eq(BASE_STAKE);
-        gain = (await azur.balanceOf(i.staker.address)) - BASE_DEPO;
+        gain = (await azur.balanceOf(i.staker.address)) - BASE_STAKE - BASE_DEPO;
         balancesGains.push(gain);
         totalRewards += gain;
       }
@@ -141,13 +173,13 @@ describe("RewardPool", function () {
         totalRewards = 0n;
 
       for (const i of users) {
-        resStakes.push({ stake: await makeStakeFor(rewardPool, i, BASE_STAKE), staker: i });
+        resStakes.push({ stake: await makeStake(rewardPool, i, BASE_STAKE), staker: i });
         await timeShiftBy(ethers, ONE_DAY);
       }
 
       await makeDistributeReward(rewardPool, owner, BASE_REWARD);
 
-      // try wintdraw revard from not owned stake
+      // try withdraw reward from not owned stake
       await expect(
         makeWithdrawReward(rewardPool, resStakes[0].staker, resStakes[2].stake.stakeId)
       ).to.be.revertedWithCustomError(rewardPool, "NotStakeOwner()");
@@ -194,7 +226,7 @@ describe("RewardPool", function () {
       expect(await rewardPool.unstakePeriod()).to.be.eq(UNSTAKEPERIOD * 2);
 
       for (const i of Array(3).keys()) {
-        resStakes.push(await makeStakeFor(rewardPool, user, BASE_STAKE));
+        resStakes.push(await makeStake(rewardPool, user, BASE_STAKE));
         await timeShiftBy(ethers, ONE_DAY);
       }
 
@@ -219,7 +251,7 @@ describe("RewardPool", function () {
       let user = users[0];
 
       for (const i of Array(3).keys()) {
-        resStakes.push(await makeStakeFor(rewardPool, user, BASE_STAKE));
+        resStakes.push(await makeStake(rewardPool, user, BASE_STAKE));
         await timeShiftBy(ethers, ONE_DAY);
       }
 
@@ -243,7 +275,7 @@ describe("RewardPool", function () {
         gain;
 
       for (const i of users) {
-        resStakes.push({ stake: await makeStakeFor(rewardPool, i, BASE_STAKE), staker: i });
+        resStakes.push({ stake: await makeStake(rewardPool, i, BASE_STAKE), staker: i });
         await timeShiftBy(ethers, ONE_WEEK);
       }
       await timeShiftBy(ethers, ONE_DAY);
