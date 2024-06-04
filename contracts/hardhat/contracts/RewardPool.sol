@@ -145,7 +145,7 @@ contract RewardPool is OwnableUpgradeable, IRewardPool {
      * @return stakeId ID of the created stake
      */
     function stake(uint96 amount) public returns (uint256 stakeId) {
-        stakeFor(msg.sender, amount);
+        stakeId = stakeFor(msg.sender, amount);
     }
 
     /**
