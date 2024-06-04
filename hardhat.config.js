@@ -4,9 +4,12 @@ require("hardhat-contract-sizer");
 require("hardhat-gas-reporter");
 require("dotenv").config();
 
+const MAINNET_PRIVATE_KEY = process.env.MAINNET_PRIVATE_KEY || "";
 const MUMBAI_PRIVATE_KEY = process.env.MUMBAI_PRIVATE_KEY || "";
 const POLYGON_PRIVATE_KEY = process.env.POLYGON_PRIVATE_KEY || "";
 const POLYGONSCAN_API_KEY = process.env.POLYGONSCAN_API_KEY || "";
+const ETHERSCAN_API_KEY = process.env.ETHERSCAN_API_KEY || "";
+const INFURA_API_KEY = process.env.INFURA_API_KEY || "";
 
 const exportNetworks = {
   hardhat: {
@@ -25,9 +28,16 @@ if (MUMBAI_PRIVATE_KEY != "") {
 
 if (POLYGON_PRIVATE_KEY != "") {
   exportNetworks["polygon"] = {
-    url: "https://polygon-bor-rpc.publicnode.com",
+    url: "https://polygon-rpc.com",
     accounts: [`${POLYGON_PRIVATE_KEY}`],
   };
+}
+
+if (MAINNET_PRIVATE_KEY != "") {
+  exportNetworks["mainnet"] = {
+    url: `https://mainnet.infura.io/v3/${INFURA_API_KEY}`,
+    accounts: [`${MAINNET_PRIVATE_KEY}`]
+  }
 }
 
 module.exports = {
@@ -51,6 +61,7 @@ module.exports = {
     apiKey: {
       mumbai: POLYGONSCAN_API_KEY,
       polygon: POLYGONSCAN_API_KEY,
+      mainnet: ETHERSCAN_API_KEY,
     },
   },
   contractSizer: {
