@@ -2,11 +2,11 @@
 
 pragma solidity 0.8.24;
 
+import "./interface/IRewardPool.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/math/SafeCast.sol";
-import "./interface/IRewardPool.sol";
 
 /*
 This contract is used for distributing rewards for rewardPool to various stakers.
@@ -61,6 +61,9 @@ contract RewardPool is OwnableUpgradeable, IRewardPool {
     uint256 public rewardPerPower;
     uint256 public unstakePeriod;
 
+    IRewardPoolV2 public rewardPoolV2;
+    bool public isStakingProhibited;
+
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
         _disableInitializers();
@@ -78,6 +81,26 @@ contract RewardPool is OwnableUpgradeable, IRewardPool {
         token = token_;
         unstakePeriod = unstakePeriod_;
         distributions[0].time = block.timestamp.toUint64();
+    }
+
+    /**
+     * @notice Owner's function that is used to change the address of liquid staking contract to migrate.
+     */
+    function changeRewardPoolV2(
+        IRewardPoolV2 newRewardPoolV2
+    ) external onlyOwner {
+        rewardPoolV2 = newRewardPoolV2;
+        emit RewardPoolV2Changed(newRewardPoolV2);
+    }
+
+    /**
+     * @dev Changes the staking status.
+     * @param isStakingProhibited_ The new staking status (true for prohibited, false for allowed).
+     */
+    function changeStakingStatus(bool isStakingProhibited_) external onlyOwner {
+        if (isStakingProhibited_ == isStakingProhibited) revert NoChanges();
+        isStakingProhibited = isStakingProhibited_;
+        emit StakingStatusChanged(isStakingProhibited_);
     }
 
     /**
@@ -167,6 +190,8 @@ contract RewardPool is OwnableUpgradeable, IRewardPool {
         address account,
         uint96 amount
     ) public returns (uint256 stakeId) {
+        if (isStakingProhibited) revert StakingIsProhibited();
+
         token.safeTransferFrom(msg.sender, address(this), amount);
 
         // This stake's first distribution will be next distribution
@@ -201,6 +226,22 @@ contract RewardPool is OwnableUpgradeable, IRewardPool {
      */
     function withdrawReward(uint256 stakeId) public {
         _withdrawReward(stakeId);
+    }
+
+    /**
+     * @dev Migrates a stake to the RewardPoolV2 contract.
+     * @param stakeId The ID of the stake to migrate.
+     */
+    function migrateToV2(uint256 stakeId) external {
+        if (address(rewardPoolV2) == address(0)) revert RewardPoolV2NotSet();
+
+        _withdrawReward(stakeId);
+
+        uint96 amount = _removeStake(stakeId);
+        token.approve(address(rewardPoolV2), amount);
+        rewardPoolV2.depositFor(msg.sender, amount);
+
+        emit StakeMigrated(stakeId, address(rewardPoolV2));
     }
 
     /**
@@ -278,6 +319,18 @@ contract RewardPool is OwnableUpgradeable, IRewardPool {
     function _requestUnstake(uint256 stakeId) private {
         _withdrawReward(stakeId);
 
+        uint96 amount = _removeStake(stakeId);
+        uint256 unstakeTime = block.timestamp + unstakePeriod;
+        unstakes[stakeId] = Unstake({
+            owner: msg.sender,
+            amount: amount,
+            time: unstakeTime.toUint64()
+        });
+
+        emit UnstakeRequested(stakeId, msg.sender, amount, unstakeTime);
+    }
+
+    function _removeStake(uint256 stakeId) internal returns (uint96) {
         uint32 distributionId = lastDistributionId + 1;
         uint96 amount = stakes[stakeId].amount;
 
@@ -290,17 +343,9 @@ contract RewardPool is OwnableUpgradeable, IRewardPool {
             distributions[distributionId].powerXTimeDelta -= timeDelta * amount;
         }
 
-        uint256 unstakeTime = block.timestamp + unstakePeriod;
-
-        unstakes[stakeId] = Unstake({
-            owner: msg.sender,
-            amount: amount,
-            time: unstakeTime.toUint64()
-        });
-
         delete stakes[stakeId];
 
-        emit UnstakeRequested(stakeId, msg.sender, amount, unstakeTime);
+        return amount;
     }
 
     /**
