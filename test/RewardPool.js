@@ -5,6 +5,7 @@ const {
   tokens,
   timeShiftBy,
   deployRewardPool,
+  deployRewardPoolV2,
   makeStake,
   makeStakeFor,
   makeUnstake,
@@ -12,6 +13,7 @@ const {
   makeDistributeReward,
   makeWithdrawReward,
   makeChangeUnstakePeriod,
+  makeMigrationToV2,
 } = require("../utils/utils");
 
 const INIT_MINT = tokens("100000");
@@ -31,17 +33,23 @@ describe("RewardPool", function () {
     const AZUR = await ethers.getContractFactory("TestERC20", { signer: owner });
     const azur = await AZUR.deploy("AZUR", "AZUR", INIT_MINT);
     await azur.waitForDeployment();
+    azur.address = await azur.getAddress();
 
-    const rewardPool = await deployRewardPool(await azur.getAddress(), owner, UNSTAKEPERIOD);
-    const rewardPoolAddress = await rewardPool.getAddress();
+    const rewardPool = await deployRewardPool(azur.address, owner, UNSTAKEPERIOD);
+    rewardPool.address = await rewardPool.getAddress();
 
-    await azur.connect(owner).approve(rewardPoolAddress, INIT_MINT);
+    const stAzur = await deployRewardPoolV2(azur.address, owner, "Staked $AZUR", "stAZUR", UNSTAKEPERIOD);
+    stAzur.address = await stAzur.getAddress();
+
+    await azur.connect(owner).approve(rewardPool.address, INIT_MINT);
     for (const i of users) {
       await azur.connect(owner).transfer(i.address, BASE_DEPO);
-      await azur.connect(i).approve(rewardPoolAddress, BASE_DEPO);
+      await azur.connect(i).approve(rewardPool.address, BASE_DEPO);
     }
 
-    return { rewardPool, azur, owner, users };
+    await rewardPool.connect(owner).changeRewardPoolV2(stAzur.address);
+
+    return { rewardPool, azur, stAzur, owner, users };
   }
 
   describe("Deployment", function () {
@@ -54,7 +62,7 @@ describe("RewardPool", function () {
       const MONTH = 60 * 60 * 24 * 30;
       await expect(rewardPool.connect(owner).changeUnstakePeriod(MONTH + 1)).to.be.revertedWithCustomError(
         rewardPool,
-        "MaxUnstakePeriodExceeded()"
+        "MaxUnstakePeriodExceeded()",
       );
     });
     it("Should set the right owner", async function () {
@@ -65,7 +73,7 @@ describe("RewardPool", function () {
       const { rewardPool, owner } = await loadFixture(deployDistributorFixture);
       await expect(makeDistributeReward(rewardPool, owner, BASE_REWARD)).to.revertedWithCustomError(
         rewardPool,
-        "NoStakes()"
+        "NoStakes()",
       );
     });
     it("Get equal stakes from 3 stakers, withdraw stakes", async function () {
@@ -85,7 +93,7 @@ describe("RewardPool", function () {
       for (const i of resStakes)
         await expect(makeUnstake(rewardPool, i.staker, i.stake.stakeId)).to.be.revertedWithCustomError(
           rewardPool,
-          "IncorrectUnstakeTime()"
+          "IncorrectUnstakeTime()",
         );
 
       await timeShiftBy(ethers, UNSTAKEPERIOD);
@@ -116,7 +124,7 @@ describe("RewardPool", function () {
       for (const i of resStakes)
         await expect(makeUnstake(rewardPool, i.staker, i.stake.stakeId)).to.be.revertedWithCustomError(
           rewardPool,
-          "IncorrectUnstakeTime()"
+          "IncorrectUnstakeTime()",
         );
 
       await timeShiftBy(ethers, UNSTAKEPERIOD);
@@ -179,9 +187,9 @@ describe("RewardPool", function () {
 
       await makeDistributeReward(rewardPool, owner, BASE_REWARD);
 
-      // try withdraw reward from not owned stake
+      // try to withdraw reward from not owned stake
       await expect(
-        makeWithdrawReward(rewardPool, resStakes[0].staker, resStakes[2].stake.stakeId)
+        makeWithdrawReward(rewardPool, resStakes[0].staker, resStakes[2].stake.stakeId),
       ).to.be.revertedWithCustomError(rewardPool, "NotStakeOwner()");
 
       for (const i of resStakes) {
@@ -285,12 +293,12 @@ describe("RewardPool", function () {
       await timeShiftBy(ethers, UNSTAKEPERIOD);
 
       expect((await makeUnstake(rewardPool, resStakes[1].staker, resStakes[1].stake.stakeId)).amount).to.be.eq(
-        BASE_STAKE
+        BASE_STAKE,
       );
 
       // try unstake already unstaked
       await expect(
-        makeUnstake(rewardPool, resStakes[1].staker, resStakes[1].stake.stakeId)
+        makeUnstake(rewardPool, resStakes[1].staker, resStakes[1].stake.stakeId),
       ).to.be.revertedWithCustomError(rewardPool, "IncorrectUnstake()");
 
       await makeDistributeReward(rewardPool, owner, BASE_REWARD);
@@ -314,6 +322,116 @@ describe("RewardPool", function () {
       expect(await azur.balanceOf(resStakes[1].staker)).to.be.eq(BASE_DEPO);
       expect(totalRewards).to.be.closeTo(BASE_REWARD, 1);
       expect(balancesGains[0]).gt(balancesGains[1]);
+    });
+    it("Get equal stakes from 3 stakers, migrate stakes", async function () {
+      const { rewardPool, azur, stAzur, owner, users } = await loadFixture(deployDistributorFixture);
+      let resStakes = [];
+
+      for (const i of users) {
+        resStakes.push({ stake: await makeStake(rewardPool, i, BASE_STAKE), staker: i });
+      }
+
+      await timeShiftBy(ethers, ONE_DAY * 365);
+
+      const reward = 100n;
+      await makeDistributeReward(rewardPool, owner, reward);
+
+      for (const i of resStakes) {
+        const azurBalance = await azur.balanceOf(i.staker.address);
+        const stAzurBalance = await stAzur.balanceOf(i.staker.address);
+
+        await makeMigrationToV2(rewardPool, i.staker, i.stake.stakeId);
+
+        expect(await azur.balanceOf(i.staker)).to.be.closeTo(azurBalance + reward / BigInt(resStakes.length), 1);
+        expect(await stAzur.balanceOf(i.staker.address)).to.be.equal(stAzurBalance + BASE_STAKE);
+        await expect(makeRequestUnstake(rewardPool, i.staker, i.stake.stakeId)).to.be.revertedWithCustomError(
+          rewardPool,
+          "NotStakeOwner",
+        );
+        await expect(makeUnstake(rewardPool, i.staker, i.stake.stakeId)).to.be.revertedWithCustomError(
+          rewardPool,
+          "IncorrectUnstake",
+        );
+        await expect(
+          makeWithdrawReward(rewardPool, resStakes[0].staker, i.stake.stakeId),
+        ).to.be.revertedWithCustomError(rewardPool, "NotStakeOwner");
+        await expect(makeMigrationToV2(rewardPool, i.staker, i.stake.stakeId)).to.be.revertedWithCustomError(
+          rewardPool,
+          "NotStakeOwner",
+        );
+      }
+    });
+    it("Prohibit staking", async function () {
+      const { rewardPool, owner, users } = await loadFixture(deployDistributorFixture);
+
+      await rewardPool.connect(owner).changeStakingStatus(true);
+      await expect(makeStake(rewardPool, users[0], BASE_STAKE)).to.be.revertedWithCustomError(
+        rewardPool,
+        "StakingIsProhibited",
+      );
+      await expect(makeStakeFor(rewardPool, users[0], BASE_STAKE, users[1])).to.be.revertedWithCustomError(
+        rewardPool,
+        "StakingIsProhibited",
+      );
+    });
+    it("Should not allow migration if V2 contract is not set", async function () {
+      const { rewardPool, owner, users } = await loadFixture(deployDistributorFixture);
+
+      await rewardPool.connect(owner).changeRewardPoolV2(ethers.ZeroAddress);
+      await expect(makeMigrationToV2(rewardPool, users[0], 1234567890)).to.be.revertedWithCustomError(
+        rewardPool,
+        "RewardPoolV2NotSet",
+      );
+    });
+    it("Should not allow migration of non-existing stake", async function () {
+      const { rewardPool, users } = await loadFixture(deployDistributorFixture);
+      await expect(makeMigrationToV2(rewardPool, users[0], 1234567890)).to.be.revertedWithCustomError(
+        rewardPool,
+        "NotStakeOwner",
+      );
+    });
+    it("Should not allow migration of unbonded stake", async function () {
+      const { rewardPool, users } = await loadFixture(deployDistributorFixture);
+
+      const stake = await makeStake(rewardPool, users[0], BASE_STAKE);
+      await makeRequestUnstake(rewardPool, users[0], stake.stakeId);
+
+      await expect(makeMigrationToV2(rewardPool, users[0], stake.stakeId)).to.be.revertedWithCustomError(
+        rewardPool,
+        "NotStakeOwner",
+      );
+    });
+    it("Should not allow migration of withdrawn stake", async function () {
+      const { rewardPool, users } = await loadFixture(deployDistributorFixture);
+
+      const stake = await makeStake(rewardPool, users[0], BASE_STAKE);
+      await makeRequestUnstake(rewardPool, users[0], stake.stakeId);
+      await timeShiftBy(ethers, UNSTAKEPERIOD);
+      await makeUnstake(rewardPool, users[0], stake.stakeId);
+
+      await expect(makeMigrationToV2(rewardPool, users[0], stake.stakeId)).to.be.revertedWithCustomError(
+        rewardPool,
+        "NotStakeOwner",
+      );
+    });
+    it("Should not allow migrate a stake twice", async function () {
+      const { rewardPool, users } = await loadFixture(deployDistributorFixture);
+
+      const stake = await makeStake(rewardPool, users[0], BASE_STAKE);
+      await makeMigrationToV2(rewardPool, users[0], stake.stakeId);
+      await expect(makeMigrationToV2(rewardPool, users[0], stake.stakeId)).to.be.revertedWithCustomError(
+        rewardPool,
+        "NotStakeOwner",
+      );
+    });
+    it("Should not allow a stake by non-owner", async function () {
+      const { rewardPool, users } = await loadFixture(deployDistributorFixture);
+
+      const stake = await makeStake(rewardPool, users[0], BASE_STAKE);
+      await expect(makeMigrationToV2(rewardPool, users[1], stake.stakeId)).to.be.revertedWithCustomError(
+        rewardPool,
+        "NotStakeOwner",
+      );
     });
   });
 });

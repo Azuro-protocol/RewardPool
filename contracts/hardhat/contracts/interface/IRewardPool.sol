@@ -2,6 +2,8 @@
 
 pragma solidity 0.8.24;
 
+import "./IRewardPoolV2.sol";
+
 interface IRewardPool {
     /** @notice Structure describing one reward distribution for node */
     struct Distribution {
@@ -29,6 +31,10 @@ interface IRewardPool {
         uint64 time;
     }
 
+    event RewardPoolV2Changed(IRewardPoolV2 newRewardPoolV2);
+
+    event StakingStatusChanged(bool isStakingProhibited);
+
     /** @notice Event emitted when new stake is created */
     event Staked(
         uint256 indexed stakeId,
@@ -38,6 +44,8 @@ interface IRewardPool {
 
     /** @notice Event emitted when reward is wihdrawn for some stake */
     event RewardWithdrawn(uint256 indexed stakeId, uint256 reward);
+
+    event StakeMigrated(uint256 stakeId, address rewardPoolV2);
 
     /** @notice Event emitted when some unstake is requested */
     event UnstakeRequested(
@@ -60,9 +68,12 @@ interface IRewardPool {
     /** @notice Event emitted when reward is distributed */
     event RewardDistributed(uint256 reward);
 
+    error NoChanges();
     error NoStakes();
     error NotStakeOwner();
     error IncorrectUnstake();
     error IncorrectUnstakeTime();
     error MaxUnstakePeriodExceeded();
+    error RewardPoolV2NotSet();
+    error StakingIsProhibited();
 }

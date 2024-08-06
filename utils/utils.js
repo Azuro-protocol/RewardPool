@@ -1,4 +1,3 @@
-const hre = require("hardhat");
 const { ethers } = require("hardhat");
 
 function getTimeout(chainId) {
@@ -46,23 +45,29 @@ const deployRewardPool = async (azurAddress, owner, unstakedPeriod) => {
   return rewardPool;
 };
 
+const deployRewardPoolV2 = async (azurAddress, owner, name, symbol, unstakePeriod) => {
+  const RewardPoolV2 = await ethers.getContractFactory("RewardPoolV2", { signer: owner });
+  const rewardPoolV2 = await upgrades.deployProxy(RewardPoolV2, [azurAddress, name, symbol, unstakePeriod]);
+  await rewardPoolV2.waitForDeployment();
+  return rewardPoolV2;
+};
+
 const makeStake = async (rewardPool, staker, amount) => {
-  await rewardPool.connect(staker).stake(amount);
-  return await getStakeDetails(rewardPool);
+  const tx = await rewardPool.connect(staker).stake(amount);
+  return await getStakeDetails(tx);
 };
 
 const makeStakeFor = async (rewardPool, staker, amount, recepient) => {
-  await rewardPool.connect(staker).stakeFor(recepient, amount);
-  return await getStakeDetails(rewardPool);
+  const tx = await rewardPool.connect(staker).stakeFor(recepient, amount);
+  return await getStakeDetails(tx);
 };
 
-const getStakeDetails = async (rewardPool) => {
-  let filter = rewardPool.filters.Staked;
-  let e = (await rewardPool.queryFilter(filter, -1))[0].args;
+const getStakeDetails = async (tx) => {
+  const result = await tx.wait();
   return {
-    stakeId: e.stakeId,
-    staker: e.staker,
-    amount: e.amount,
+    stakeId: result.logs[1].args.stakeId,
+    staker: result.logs[1].args.staker,
+    amount: result.logs[1].args.amount,
   };
 };
 
@@ -82,6 +87,10 @@ const getRequestUnstakeDetails = async (rewardPool) => {
     amount: e.amount,
     reward: eReward.reward,
   };
+};
+
+const makeMigrationToV2 = async (rewardPool, staker, stakeId) => {
+  await rewardPool.connect(staker).migrateToV2(stakeId);
 };
 
 const makeUnstake = async (rewardPool, staker, stakeId) => {
@@ -143,11 +152,11 @@ const getChangeUnstakePeriodDetails = async (rewardPool) => {
 module.exports = {
   tokens,
   getTimeout,
-  getBlockTime,
   timeShiftBy,
   makeStake,
   makeStakeFor,
   deployRewardPool,
+  deployRewardPoolV2,
   getStakeDetails,
   makeUnstake,
   getUnstakeDetails,
@@ -158,4 +167,5 @@ module.exports = {
   getWithdrawRewardDetails,
   makeChangeUnstakePeriod,
   getChangeUnstakePeriodDetails,
+  makeMigrationToV2,
 };

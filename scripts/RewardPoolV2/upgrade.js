@@ -1,28 +1,26 @@
 const { ethers } = require("hardhat");
 const hre = require("hardhat");
-const { getTimeout, deployRewardPool } = require("../utils/utils");
+const { getTimeout } = require("../../utils/utils");
 
 async function main() {
   const [deployer] = await ethers.getSigners();
 
   // ........................ ENV ENV ENV ................
-  const AZUR = process.env.AZUR;
-  const UNSTAKEPERIOD = process.env.UNSTAKEPERIOD;
+  const REWARD_POOL_V2_ADDRESS = process.env.REWARD_POOL_V2_ADDRESS;
   // ........................ ENV ENV ENV ................
 
-  let summary = {};
-
   console.log("Deployer wallet:", deployer.address);
+  console.log("Upgrading RewardPoolV2:", REWARD_POOL_V2_ADDRESS);
 
   const chainId = await hre.network.provider.send("eth_chainId");
   const timeout = getTimeout(chainId);
 
-  const rewardPool = await deployRewardPool(AZUR, deployer, UNSTAKEPERIOD);
-
+  const RewardPoolV2 = await ethers.getContractFactory("RewardPoolV2");
+  await upgrades.upgradeProxy(REWARD_POOL_V2_ADDRESS, RewardPoolV2);
   await timeout();
-  summary["UNSTAKEPERIOD"] = UNSTAKEPERIOD;
 
-  console.log("Reward settings:", JSON.stringify(summary));
+  const rewardPoolV2ImplAddress = await upgrades.erc1967.getImplementationAddress(REWARD_POOL_V2_ADDRESS);
+  console.log("RewardPoolV2 new implementation address:", rewardPoolV2ImplAddress);
 }
 
 main()
