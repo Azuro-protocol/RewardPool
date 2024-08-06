@@ -23,11 +23,12 @@ contract RewardPoolV2 is ERC20WrapperUpgradeable, OwnableUpgradeable {
 
     event WithdrawalDelayChanged(uint256 newWithdrawalDelay);
     event WithdrawalRequested(
-        uint256 indexed requestId,
         address indexed requester,
+        uint256 indexed requestId,
         uint256 value,
         uint64 withdrawAfter
     );
+    event WithdrawalRequestProcessed(uint256 indexed requestId, address indexed to);
 
     error OnlyRequesterCanWithdrawToAnotherAddress(address requester);
     error RequestDoesNotExist(uint256 requestId);
@@ -82,7 +83,7 @@ contract RewardPoolV2 is ERC20WrapperUpgradeable, OwnableUpgradeable {
             withdrawAfter: withdrawAfter
         });
 
-        emit WithdrawalRequested(requestId, msg.sender, value, withdrawAfter);
+        emit WithdrawalRequested(msg.sender, requestId, value, withdrawAfter);
 
         return requestId;
     }
@@ -150,6 +151,7 @@ contract RewardPoolV2 is ERC20WrapperUpgradeable, OwnableUpgradeable {
             revert OnlyRequesterCanWithdrawToAnotherAddress(requester);
 
         delete withdrawalRequests[requestId];
+        emit WithdrawalRequestProcessed(requestId, account);
 
         return value;
     }
