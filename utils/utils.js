@@ -45,9 +45,9 @@ const deployRewardPool = async (azurAddress, owner, unstakedPeriod) => {
   return rewardPool;
 };
 
-const deployRewardPoolV2 = async (azurAddress, owner, unstakePeriod) => {
+const deployRewardPoolV2 = async (azurAddress, owner, name, symbol, unstakePeriod) => {
   const RewardPoolV2 = await ethers.getContractFactory("RewardPoolV2", { signer: owner });
-  const rewardPoolV2 = await upgrades.deployProxy(RewardPoolV2, [azurAddress, "Staked AZUR", "stAZUR", unstakePeriod]);
+  const rewardPoolV2 = await upgrades.deployProxy(RewardPoolV2, [azurAddress, name, symbol, unstakePeriod]);
   await rewardPoolV2.waitForDeployment();
   return rewardPoolV2;
 };

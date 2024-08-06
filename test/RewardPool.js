@@ -38,7 +38,7 @@ describe("RewardPool", function () {
     const rewardPool = await deployRewardPool(azur.address, owner, UNSTAKEPERIOD);
     rewardPool.address = await rewardPool.getAddress();
 
-    const stAzur = await deployRewardPoolV2(azur.address, owner, UNSTAKEPERIOD);
+    const stAzur = await deployRewardPoolV2(azur.address, owner, "Staked $AZUR", "stAZUR", UNSTAKEPERIOD);
     stAzur.address = await stAzur.getAddress();
 
     await azur.connect(owner).approve(rewardPool.address, INIT_MINT);

@@ -32,7 +32,7 @@
     "compile": "npx hardhat compile",
     "test": "npx hardhat test",
     "prettier-sol": "npx prettier --write \"contracts/**/*.sol\"",
-    "prettier-js": "npx prettier --write {scripts,test,utils}/*.js --print-width 120 --tab-width 2",
+    "prettier-js": "npx prettier --write {scripts/*,test,utils}/*.js --print-width 120 --tab-width 2",
     "coverage": "npx hardhat coverage"
   }
 }

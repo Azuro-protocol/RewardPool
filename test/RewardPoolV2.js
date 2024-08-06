@@ -27,7 +27,7 @@ describe("RewardPool", function () {
     await azur.waitForDeployment();
     azur.address = await azur.getAddress();
 
-    const stAzur = await deployRewardPoolV2(azur.address, owner, WITHDRAWAL_DELAY);
+    const stAzur = await deployRewardPoolV2(azur.address, owner, "Staked $AZUR", "stAZUR", WITHDRAWAL_DELAY);
     stAzur.address = await stAzur.getAddress();
 
     await azur.connect(owner).transfer(user.address, INIT_BALANCE);
