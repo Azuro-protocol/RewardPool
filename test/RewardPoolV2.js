@@ -7,6 +7,7 @@ const INIT_MINT = tokens(1000000);
 const INIT_BALANCE = tokens(1000);
 const DEPOSIT = tokens(100);
 const WITHDRAWAL = DEPOSIT / 2n;
+const ACCIDENTALLY_TRANSFERRED = tokens(50);
 
 const ONE_DAY = 60 * 60 * 24;
 const ONE_WEEK = ONE_DAY * 7;
@@ -150,12 +151,32 @@ describe("RewardPool", function () {
     it("Should recover accidentally transferred funds", async function () {
       const { azur, stAzur, owner, user, ownerBalanceBefore, userBalanceBefore } = await loadFixture(deployFixture);
 
-      await azur.connect(user).transfer(stAzur.address, DEPOSIT);
-      expect(await azur.balanceOf(user.address)).to.be.equal(userBalanceBefore - DEPOSIT);
+      await azur.connect(user).transfer(stAzur.address, ACCIDENTALLY_TRANSFERRED);
+      expect(await azur.balanceOf(user.address)).to.be.equal(userBalanceBefore - ACCIDENTALLY_TRANSFERRED);
 
       await stAzur.connect(owner).recover(owner.address);
       expect(await azur.balanceOf(owner.address)).to.be.equal(ownerBalanceBefore);
-      expect(await stAzur.balanceOf(owner.address)).to.be.equal(DEPOSIT);
+      expect(await stAzur.balanceOf(owner.address)).to.be.equal(ACCIDENTALLY_TRANSFERRED);
+    });
+    it("Should recover accidentally transferred funds with requested withdrawals", async function () {
+      const { azur, stAzur, owner, user, ownerBalanceBefore, userBalanceBefore } = await loadFixture(deployFixture);
+
+      await stAzur.connect(user).depositFor(user.address, DEPOSIT);
+      const requestId = await requestWithdrawal(stAzur, user, WITHDRAWAL);
+
+      await azur.connect(user).transfer(stAzur.address, ACCIDENTALLY_TRANSFERRED);
+      expect(await azur.balanceOf(user.address)).to.be.equal(userBalanceBefore - DEPOSIT - ACCIDENTALLY_TRANSFERRED);
+
+      await stAzur.connect(owner).recover(owner.address);
+      expect(await azur.balanceOf(owner.address)).to.be.equal(ownerBalanceBefore);
+      expect(await stAzur.balanceOf(owner.address)).to.be.equal(ACCIDENTALLY_TRANSFERRED);
+
+      await timeShiftBy(ethers, WITHDRAWAL_DELAY);
+      await stAzur.connect(user).withdrawTo(user.address, requestId);
+      expect(await stAzur.balanceOf(user.address)).to.be.equal(DEPOSIT - WITHDRAWAL);
+      expect(await azur.balanceOf(user.address)).to.be.equal(
+        userBalanceBefore - DEPOSIT + WITHDRAWAL - ACCIDENTALLY_TRANSFERRED,
+      );
     });
   });
 

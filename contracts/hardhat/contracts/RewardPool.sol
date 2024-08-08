@@ -233,15 +233,16 @@ contract RewardPool is OwnableUpgradeable, IRewardPool {
      * @param stakeId The ID of the stake to migrate.
      */
     function migrateToV2(uint256 stakeId) external {
-        if (address(rewardPoolV2) == address(0)) revert RewardPoolV2NotSet();
+        IRewardPoolV2 rewardPoolV2_ = rewardPoolV2;
+        if (address(rewardPoolV2_) == address(0)) revert RewardPoolV2NotSet();
 
         _withdrawReward(stakeId);
 
         uint96 amount = _removeStake(stakeId);
-        token.approve(address(rewardPoolV2), amount);
-        rewardPoolV2.depositFor(msg.sender, amount);
+        token.approve(address(rewardPoolV2_), amount);
+        rewardPoolV2_.depositFor(msg.sender, amount);
 
-        emit StakeMigrated(stakeId, address(rewardPoolV2));
+        emit StakeMigrated(stakeId, address(rewardPoolV2_));
     }
 
     /**
