@@ -45,7 +45,11 @@ interface IRewardPool {
     /** @notice Event emitted when reward is wihdrawn for some stake */
     event RewardWithdrawn(uint256 indexed stakeId, uint256 reward);
 
-    event StakeMigrated(uint256 stakeId, address rewardPoolV2);
+    event StakesMigrated(
+        address indexed account,
+        address indexed rewardPoolV2,
+        uint256[] stakeIds
+    );
 
     /** @notice Event emitted when some unstake is requested */
     event UnstakeRequested(

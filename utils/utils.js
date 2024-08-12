@@ -89,8 +89,8 @@ const getRequestUnstakeDetails = async (rewardPool) => {
   };
 };
 
-const makeMigrationToV2 = async (rewardPool, staker, stakeId) => {
-  await rewardPool.connect(staker).migrateToV2(stakeId);
+const makeMigrationToV2 = async (rewardPool, staker, stakeIds) => {
+  await rewardPool.connect(staker).migrateToV2(stakeIds);
 };
 
 const makeUnstake = async (rewardPool, staker, stakeId) => {
