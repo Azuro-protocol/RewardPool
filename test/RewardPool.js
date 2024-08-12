@@ -340,7 +340,7 @@ describe("RewardPool", function () {
         const azurBalance = await azur.balanceOf(i.staker.address);
         const stAzurBalance = await stAzur.balanceOf(i.staker.address);
 
-        await makeMigrationToV2(rewardPool, i.staker, i.stake.stakeId);
+        await makeMigrationToV2(rewardPool, i.staker, [i.stake.stakeId]);
 
         expect(await azur.balanceOf(i.staker)).to.be.closeTo(azurBalance + reward / BigInt(resStakes.length), 1);
         expect(await stAzur.balanceOf(i.staker.address)).to.be.equal(stAzurBalance + BASE_STAKE);
@@ -355,7 +355,47 @@ describe("RewardPool", function () {
         await expect(
           makeWithdrawReward(rewardPool, resStakes[0].staker, i.stake.stakeId),
         ).to.be.revertedWithCustomError(rewardPool, "NotStakeOwner");
-        await expect(makeMigrationToV2(rewardPool, i.staker, i.stake.stakeId)).to.be.revertedWithCustomError(
+        await expect(makeMigrationToV2(rewardPool, i.staker, [i.stake.stakeId])).to.be.revertedWithCustomError(
+          rewardPool,
+          "NotStakeOwner",
+        );
+      }
+    });
+    it("Get 3 equal stakes from one staker, migrate stakes in one batch", async function () {
+      const { rewardPool, azur, stAzur, owner, users } = await loadFixture(deployDistributorFixture);
+      const stakeIds = [];
+
+      const staker = users[0];
+      for (const i of Array(3).keys()) {
+        stakeIds.push((await makeStake(rewardPool, staker, BASE_STAKE)).stakeId);
+      }
+
+      await timeShiftBy(ethers, ONE_DAY * 365);
+
+      const reward = 100n;
+      await makeDistributeReward(rewardPool, owner, reward);
+
+      const azurBalance = await azur.balanceOf(staker.address);
+      const stAzurBalance = await stAzur.balanceOf(staker.address);
+
+      await makeMigrationToV2(rewardPool, staker, stakeIds);
+      expect(await azur.balanceOf(staker)).to.be.closeTo(azurBalance + reward, 1);
+      expect(await stAzur.balanceOf(staker.address)).to.be.equal(stAzurBalance + BASE_STAKE * 3n);
+      for (const stakeId of stakeIds) {
+        await expect(makeRequestUnstake(rewardPool, staker, stakeId)).to.be.revertedWithCustomError(
+          rewardPool,
+          "NotStakeOwner",
+        );
+        await expect(makeUnstake(rewardPool, staker, stakeId)).to.be.revertedWithCustomError(
+          rewardPool,
+          "IncorrectUnstake",
+        );
+        await expect(makeWithdrawReward(rewardPool, staker, stakeId)).to.be.revertedWithCustomError(
+          rewardPool,
+          "NotStakeOwner",
+        );
+        console.log(1);
+        await expect(makeMigrationToV2(rewardPool, staker, [stakeId])).to.be.revertedWithCustomError(
           rewardPool,
           "NotStakeOwner",
         );
@@ -378,14 +418,14 @@ describe("RewardPool", function () {
       const { rewardPool, owner, users } = await loadFixture(deployDistributorFixture);
 
       await rewardPool.connect(owner).changeRewardPoolV2(ethers.ZeroAddress);
-      await expect(makeMigrationToV2(rewardPool, users[0], 1234567890)).to.be.revertedWithCustomError(
+      await expect(makeMigrationToV2(rewardPool, users[0], [1234567890])).to.be.revertedWithCustomError(
         rewardPool,
         "RewardPoolV2NotSet",
       );
     });
     it("Should not allow migration of non-existing stake", async function () {
       const { rewardPool, users } = await loadFixture(deployDistributorFixture);
-      await expect(makeMigrationToV2(rewardPool, users[0], 1234567890)).to.be.revertedWithCustomError(
+      await expect(makeMigrationToV2(rewardPool, users[0], [1234567890])).to.be.revertedWithCustomError(
         rewardPool,
         "NotStakeOwner",
       );
@@ -396,7 +436,7 @@ describe("RewardPool", function () {
       const stake = await makeStake(rewardPool, users[0], BASE_STAKE);
       await makeRequestUnstake(rewardPool, users[0], stake.stakeId);
 
-      await expect(makeMigrationToV2(rewardPool, users[0], stake.stakeId)).to.be.revertedWithCustomError(
+      await expect(makeMigrationToV2(rewardPool, users[0], [stake.stakeId])).to.be.revertedWithCustomError(
         rewardPool,
         "NotStakeOwner",
       );
@@ -409,7 +449,7 @@ describe("RewardPool", function () {
       await timeShiftBy(ethers, UNSTAKEPERIOD);
       await makeUnstake(rewardPool, users[0], stake.stakeId);
 
-      await expect(makeMigrationToV2(rewardPool, users[0], stake.stakeId)).to.be.revertedWithCustomError(
+      await expect(makeMigrationToV2(rewardPool, users[0], [stake.stakeId])).to.be.revertedWithCustomError(
         rewardPool,
         "NotStakeOwner",
       );
@@ -418,8 +458,8 @@ describe("RewardPool", function () {
       const { rewardPool, users } = await loadFixture(deployDistributorFixture);
 
       const stake = await makeStake(rewardPool, users[0], BASE_STAKE);
-      await makeMigrationToV2(rewardPool, users[0], stake.stakeId);
-      await expect(makeMigrationToV2(rewardPool, users[0], stake.stakeId)).to.be.revertedWithCustomError(
+      await makeMigrationToV2(rewardPool, users[0], [stake.stakeId]);
+      await expect(makeMigrationToV2(rewardPool, users[0], [stake.stakeId])).to.be.revertedWithCustomError(
         rewardPool,
         "NotStakeOwner",
       );
@@ -428,7 +468,7 @@ describe("RewardPool", function () {
       const { rewardPool, users } = await loadFixture(deployDistributorFixture);
 
       const stake = await makeStake(rewardPool, users[0], BASE_STAKE);
-      await expect(makeMigrationToV2(rewardPool, users[1], stake.stakeId)).to.be.revertedWithCustomError(
+      await expect(makeMigrationToV2(rewardPool, users[1], [stake.stakeId])).to.be.revertedWithCustomError(
         rewardPool,
         "NotStakeOwner",
       );
