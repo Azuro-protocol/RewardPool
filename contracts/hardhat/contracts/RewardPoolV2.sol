@@ -29,7 +29,7 @@ contract RewardPoolV2 is ERC20WrapperUpgradeable, OwnableUpgradeable {
     uint32 internal _updatedAt;
     uint128 internal _exchangeRate;
 
-    uint128 public rewardRate;
+    uint256 public rewardRate;
 
     event StakingIncentiveUpdated(uint128 reward, uint32 incentiveEndsAt);
     event WithdrawalDelayChanged(uint256 newWithdrawalDelay);
