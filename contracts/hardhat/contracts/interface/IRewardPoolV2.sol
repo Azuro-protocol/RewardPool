@@ -23,6 +23,8 @@ interface IRewardPoolV2 {
         uint256[] calldata requestIds
     ) external;
 
+    function underlyingBalanceOf(address account) external view returns (uint256);
+
     function calculateWithdrawalAmount(
         uint256 redeemAmount
     ) external view returns (uint128);

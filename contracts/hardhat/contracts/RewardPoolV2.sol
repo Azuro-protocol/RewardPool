@@ -193,6 +193,13 @@ contract RewardPoolV2 is ERC20WrapperUpgradeable, OwnableUpgradeable {
     }
 
     /**
+     * @dev Calculates the amount of underlying tokens that can be redeemed for a given account.
+     */
+    function underlyingBalanceOf(address account) external view returns (uint256) {
+        return calculateWithdrawalAmount(balanceOf(account));
+    }
+
+    /**
      * @dev Allows a user to deposit underlying tokens and mint the corresponding number of wrapped tokens.
      */
     function depositFor(
