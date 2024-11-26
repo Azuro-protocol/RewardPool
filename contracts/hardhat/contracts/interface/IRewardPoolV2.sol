@@ -9,6 +9,11 @@ interface IRewardPoolV2 {
 
     function recover(address account) external returns (uint256);
 
+    function updateStakingIncentive(
+        uint128 extraReward,
+        uint32 incentiveDuration
+    ) external;
+
     function requestWithdrawal(uint256 value) external returns (uint256);
 
     function withdrawTo(address account, uint256 requestId) external;
@@ -17,4 +22,10 @@ interface IRewardPoolV2 {
         address account,
         uint256[] calldata requestIds
     ) external;
+
+    function calculateWithdrawalAmount(
+        uint256 redeemAmount
+    ) external view returns (uint128);
+
+    function exchangeRate() external view returns (uint128);
 }

@@ -32,6 +32,11 @@ async function getBlockTime(ethers) {
   return time;
 }
 
+async function timeShift(time) {
+  await network.provider.send("evm_setNextBlockTimestamp", [time]);
+  await network.provider.send("evm_mine");
+}
+
 async function timeShiftBy(ethers, timeDelta) {
   let time = (await getBlockTime(ethers)) + timeDelta;
   await network.provider.send("evm_setNextBlockTimestamp", [time]);
@@ -149,9 +154,16 @@ const getChangeUnstakePeriodDetails = async (rewardPool) => {
   };
 };
 
+async function getTransactionTime(ethers, tx) {
+  const receipt = await tx.wait();
+  const block = await ethers.provider.getBlock(receipt.blockNumber);
+  return block.timestamp;
+}
+
 module.exports = {
   tokens,
   getTimeout,
+  timeShift,
   timeShiftBy,
   makeStake,
   makeStakeFor,
@@ -168,4 +180,5 @@ module.exports = {
   makeChangeUnstakePeriod,
   getChangeUnstakePeriodDetails,
   makeMigrationToV2,
+  getTransactionTime
 };

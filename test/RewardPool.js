@@ -394,7 +394,6 @@ describe("RewardPool", function () {
           rewardPool,
           "NotStakeOwner",
         );
-        console.log(1);
         await expect(makeMigrationToV2(rewardPool, staker, [stakeId])).to.be.revertedWithCustomError(
           rewardPool,
           "NotStakeOwner",
