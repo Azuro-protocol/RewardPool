@@ -180,5 +180,5 @@ module.exports = {
   makeChangeUnstakePeriod,
   getChangeUnstakePeriodDetails,
   makeMigrationToV2,
-  getTransactionTime
+  getTransactionTime,
 };
