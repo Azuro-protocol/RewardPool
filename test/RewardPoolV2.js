@@ -106,7 +106,7 @@ describe("RewardPool V2", function () {
     await azur.waitForDeployment();
     azur.address = await azur.getAddress();
 
-    const stAzur = await deployRewardPoolV2(azur.address, owner, "Staked $AZUR", "stAZUR", WITHDRAWAL_DELAY);
+    const stAzur = await deployRewardPoolV2(azur.address, owner, "Depositd $AZUR", "stAZUR", WITHDRAWAL_DELAY);
     stAzur.address = await stAzur.getAddress();
 
     await azur.connect(owner).approve(stAzur.address, INIT_BALANCE);
@@ -253,7 +253,7 @@ describe("RewardPool V2", function () {
     });
   });
   context("Staking Incentive", function () {
-    it("Stake before the start of the incentive program and unstake it after the end", async function () {
+    it("Deposit before the start of the incentive program and withdraw it after the end", async function () {
       await depositFor(user, DEPOSIT);
       await depositFor(user2, DEPOSIT);
       await depositFor(user3, DEPOSIT);
@@ -267,14 +267,14 @@ describe("RewardPool V2", function () {
         expect(await calculateAzurBalance(account.address)).to.be.closeToRelative(DEPOSIT + INCENTIVE_REWARD / 3n);
       }
     });
-    it("Stake before the start of the incentive program and unstake it a long time ago of the end", async function () {
+    it("Deposit before the start of the incentive program and withdraw it a long time ago of the end", async function () {
       await depositFor(user, DEPOSIT);
       await updateStakingIncentive(INCENTIVE_REWARD, INCENTIVE_DURATION);
       await timeShiftBy(ethers, ONE_YEAR * 5);
 
       expect(await calculateAzurBalance(user.address)).to.be.closeToRelative(DEPOSIT + INCENTIVE_REWARD);
     });
-    it("Stake before the start of the incentive program and claim reward before it ends", async function () {
+    it("Deposit before the start of the incentive program and claim reward before it ends", async function () {
       for (const account of [user, user2, user3]) {
         await depositFor(account, DEPOSIT);
       }
@@ -298,7 +298,7 @@ describe("RewardPool V2", function () {
         await expect(requestWithdrawal(account, 1)).to.be.revertedWithCustomError(stAzur, "ERC20InsufficientBalance");
       }
     });
-    it("Stake after the start of the incentive program and claim reward after it ends", async function () {
+    it("Deposit after the start of the incentive program and claim reward after it ends", async function () {
       const stAzurBalance1 = await depositFor(user, DEPOSIT);
 
       const distributionStartedAt = await updateStakingIncentive(INCENTIVE_REWARD, INCENTIVE_DURATION);
@@ -331,7 +331,7 @@ describe("RewardPool V2", function () {
         DEPOSIT + ((INCENTIVE_REWARD / 3n) * stAzurBalance3) / (stAzurBalance1 + stAzurBalance2 + stAzurBalance3),
       );
     });
-    it("Stake after the start of the incentive program and unstake it before the end", async function () {
+    it("Deposit after the start of the incentive program and withdraw it before the end", async function () {
       const distributionStartedAt = await updateStakingIncentive(INCENTIVE_REWARD, INCENTIVE_DURATION);
 
       await timeShift(distributionStartedAt + INCENTIVE_DURATION / 3 - 1);
@@ -341,7 +341,7 @@ describe("RewardPool V2", function () {
       const res1 = await requestWithdrawal(user, DEPOSIT);
       expect(res1.withdrawalAmount).to.be.closeToRelative(DEPOSIT + INCENTIVE_REWARD / 3n);
     });
-    it("Stake different stakes after the start of the incentive program and unstake it after the end", async function () {
+    it("Deposit different amounts after the start of the incentive program and withdraw it after the end", async function () {
       const stAzurBalance1 = await depositFor(user, DEPOSIT);
 
       const distributionStartedAt = await updateStakingIncentive(INCENTIVE_REWARD, INCENTIVE_DURATION);
@@ -374,7 +374,7 @@ describe("RewardPool V2", function () {
         DEPOSIT * 3n + ((INCENTIVE_REWARD / 3n) * stAzurBalance3) / (stAzurBalance1 + stAzurBalance2 + stAzurBalance3),
       );
     });
-    it("Stake different stakes by one staker after the start of the incentive program and unstake it after the end", async function () {
+    it("Deposit different amounts by one depositor after the start of the incentive program and withdraw it after the end", async function () {
       let stAzurBalance = await depositFor(user, DEPOSIT);
       const distributionStartedAt = await updateStakingIncentive(INCENTIVE_REWARD, INCENTIVE_DURATION);
 
@@ -405,7 +405,7 @@ describe("RewardPool V2", function () {
 
       /*
       317097919667 - the reward amount for one second of staking.
-      The unstake transaction will be created one second after updating the incentive program.
+      The withdrawal transaction will be created one second after updating the incentive program.
       */
       const user2RewardForOneSecond = 317097919667n;
       const res2 = await requestWithdrawal(user2, DEPOSIT);
