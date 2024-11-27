@@ -3,6 +3,7 @@ const { loadFixture } = require("@nomicfoundation/hardhat-toolbox/network-helper
 const { expect } = require("chai");
 
 const { tokens, deployRewardPoolV2, timeShift, timeShiftBy, getTransactionTime } = require("../utils/utils");
+const { ethers } = require("hardhat");
 
 const INIT_MINT = tokens(1000000);
 const INIT_BALANCE = tokens(1000);
@@ -106,7 +107,7 @@ describe("RewardPool V2", function () {
     await azur.waitForDeployment();
     azur.address = await azur.getAddress();
 
-    const stAzur = await deployRewardPoolV2(azur.address, owner, "Depositd $AZUR", "stAZUR", WITHDRAWAL_DELAY);
+    const stAzur = await deployRewardPoolV2(azur.address, owner, "Staked $AZUR", "stAZUR", WITHDRAWAL_DELAY);
     stAzur.address = await stAzur.getAddress();
 
     await azur.connect(owner).approve(stAzur.address, INIT_BALANCE);
@@ -252,7 +253,74 @@ describe("RewardPool V2", function () {
       );
     });
   });
-  context("Staking Incentive", function () {
+
+  context("Incentive program", function () {
+    it("Upgrade the contract from the version without incentive mechanics", async function () {
+      const OldRewardPoolV2 = await ethers.getContractFactory("OldRewardPoolV2", { signer: owner });
+      stAzur = await upgrades.deployProxy(OldRewardPoolV2, [azur.address, "Staked $AZUR", "stAZUR", WITHDRAWAL_DELAY]);
+      stAzur.address = await stAzur.getAddress();
+
+      await azur.connect(user).approve(stAzur.address, INIT_BALANCE);
+      await azur.connect(owner).approve(stAzur.address, INIT_BALANCE);
+
+      await stAzur.connect(user).depositFor(user.address, DEPOSIT * 3n);
+      const res1 = await requestWithdrawal(user, DEPOSIT);
+
+      const RewardPoolV2 = await ethers.getContractFactory("RewardPoolV2");
+      await upgrades.upgradeProxy(stAzur.address, RewardPoolV2);
+      stAzur = await RewardPoolV2.attach(stAzur.address);
+      stAzur.address = await stAzur.getAddress();
+
+      expect(await stAzur.exchangeRate()).to.be.equal(tokens(1));
+
+      await timeShiftBy(ethers, WITHDRAWAL_DELAY);
+      await stAzur.connect(user).withdrawTo(user.address, res1.requestId);
+      expect(await azur.balanceOf(user.address)).to.be.equal(userBalanceBefore - DEPOSIT * 2n);
+
+      const res2 = await requestWithdrawal(user, DEPOSIT);
+      await timeShiftBy(ethers, WITHDRAWAL_DELAY);
+      await stAzur.connect(user).withdrawTo(user.address, res2.requestId);
+      expect(await azur.balanceOf(user.address)).to.be.equal(userBalanceBefore - DEPOSIT);
+
+      await updateStakingIncentive(INCENTIVE_REWARD, INCENTIVE_DURATION);
+      await timeShiftBy(ethers, INCENTIVE_DURATION);
+
+      const res3 = await requestWithdrawal(user, DEPOSIT);
+      await timeShiftBy(ethers, WITHDRAWAL_DELAY);
+      await stAzur.connect(user).withdrawTo(user.address, res3.requestId);
+      expect(await azur.balanceOf(user.address)).to.be.closeToRelative(userBalanceBefore + INCENTIVE_REWARD);
+    });
+    it("No incentive program interactions", async function () {
+      expect(await stAzur.exchangeRate()).to.be.equal(tokens(1));
+
+      const stAzurBalance1 = await depositFor(user, DEPOSIT);
+      await updateStakingIncentive(INCENTIVE_REWARD, INCENTIVE_DURATION);
+      await timeShiftBy(ethers, INCENTIVE_DURATION);
+
+      const exchangeRate = (tokens(1) * (DEPOSIT + INCENTIVE_REWARD)) / DEPOSIT;
+      expect(await stAzur.exchangeRate()).to.be.closeToRelative(exchangeRate);
+
+      const stAzurBalance2 = await depositFor(user2, DEPOSIT);
+      await timeShiftBy(ethers, ONE_YEAR);
+      expect(await stAzur.exchangeRate()).to.be.closeToRelative(exchangeRate);
+
+      const res1 = await requestWithdrawal(user, stAzurBalance1);
+      expect(res1.withdrawalAmount).to.be.closeToRelative(DEPOSIT + INCENTIVE_REWARD);
+
+      const res2 = await requestWithdrawal(user2, stAzurBalance2);
+      expect(res2.withdrawalAmount).to.be.closeToRelative(DEPOSIT);
+
+      await timeShiftBy(ethers, ONE_YEAR);
+
+      await stAzur.connect(user).withdrawTo(user.address, res1.requestId);
+      expect(await stAzur.exchangeRate()).to.be.closeToRelative(exchangeRate);
+
+      await stAzur.connect(user).withdrawTo(user2.address, res2.requestId);
+      expect(await stAzur.exchangeRate()).to.be.closeToRelative(exchangeRate);
+
+      expect(await azur.balanceOf(user.address)).to.be.closeToRelative(userBalanceBefore + INCENTIVE_REWARD);
+      expect(await azur.balanceOf(user2.address)).to.be.closeToRelative(user2BalanceBefore);
+    });
     it("Deposit before the start of the incentive program and withdraw it after the end", async function () {
       await depositFor(user, DEPOSIT);
       await depositFor(user2, DEPOSIT);
@@ -265,6 +333,28 @@ describe("RewardPool V2", function () {
 
       for (const account of [user, user2, user3]) {
         expect(await calculateAzurBalance(account.address)).to.be.closeToRelative(DEPOSIT + INCENTIVE_REWARD / 3n);
+      }
+    });
+    it("Deposit before the start of the incentive program and withdraw it's part after the end", async function () {
+      await depositFor(user, DEPOSIT);
+      await depositFor(user2, DEPOSIT);
+      await depositFor(user3, DEPOSIT);
+
+      await updateStakingIncentive(INCENTIVE_REWARD, INCENTIVE_DURATION);
+      expect(await azur.balanceOf(owner.address)).to.be.equal(ownerBalanceBefore - INCENTIVE_REWARD);
+
+      await timeShiftBy(ethers, INCENTIVE_DURATION);
+
+      for (const account of [user, user2, user3]) {
+        const res = await requestWithdrawal(account, DEPOSIT / 2n);
+
+        await timeShiftBy(ethers, WITHDRAWAL_DELAY);
+
+        const azurBalance = await azur.balanceOf(account.address);
+        await stAzur.connect(account).withdrawTo(account.address, res.requestId);
+        expect(await azur.balanceOf(account.address)).to.be.closeToRelative(
+          azurBalance + (DEPOSIT + INCENTIVE_REWARD / 3n) / 2n,
+        );
       }
     });
     it("Deposit before the start of the incentive program and withdraw it a long time ago of the end", async function () {
@@ -453,7 +543,32 @@ describe("RewardPool V2", function () {
         3,
       );
     });
+    it("Recover accidentally transferred funds with incentive program", async function () {
+      await azur.connect(user2).transfer(stAzur.address, ACCIDENTALLY_TRANSFERRED);
+      expect(await stAzur.exchangeRate()).to.be.equal(tokens(1));
+
+      await depositFor(user, DEPOSIT);
+
+      const distributionStartedAt = await updateStakingIncentive(INCENTIVE_REWARD, INCENTIVE_DURATION);
+
+      await timeShift(distributionStartedAt + INCENTIVE_DURATION);
+      const res1 = await requestWithdrawal(user, DEPOSIT / 2n);
+
+      await stAzur.connect(owner).recover(owner.address);
+      expect(await azur.balanceOf(owner.address)).to.be.equal(ownerBalanceBefore - INCENTIVE_REWARD);
+
+      const res2 = await requestWithdrawal(user, DEPOSIT / 2n);
+      await timeShiftBy(ethers, WITHDRAWAL_DELAY);
+      await stAzur.connect(user).withdrawTo(user.address, res1.requestId);
+      await stAzur.connect(user).withdrawTo(user.address, res2.requestId);
+
+      expect(await azur.balanceOf(user.address)).to.be.closeToRelative(userBalanceBefore + INCENTIVE_REWARD);
+      expect((await stAzur.balanceOf(owner.address)) - ACCIDENTALLY_TRANSFERRED).to.be.equal(
+        userBalanceBefore + INCENTIVE_REWARD - (await azur.balanceOf(user.address)),
+      );
+    });
   });
+
   context("Not allowed", function () {
     it("Withdrawal to another account by a non-depositor", async function () {
       await depositFor(user, DEPOSIT);
