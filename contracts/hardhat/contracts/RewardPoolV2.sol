@@ -27,8 +27,10 @@ contract RewardPoolV2 is ERC20WrapperUpgradeable, OwnableUpgradeable {
     uint32 public incentiveEndsAt;
 
     uint32 internal _updatedAt;
+    uint32 public incentiveStartedAt;
     uint128 internal _exchangeRate;
 
+    uint128 public reward;
     uint256 public rewardRate;
 
     event StakingIncentiveUpdated(uint128 reward, uint32 incentiveEndsAt);
@@ -121,11 +123,14 @@ contract RewardPoolV2 is ERC20WrapperUpgradeable, OwnableUpgradeable {
                 MAX_INCENTIVE_DURATION
             );
 
-        uint128 reward = _remainingReward() + extraReward;
-        if (reward == 0) revert NoReward();
+        uint128 totalReward = _remainingReward() + extraReward;
+        if (totalReward == 0) revert NoReward();
 
-        rewardRate = uint128(reward.div(incentiveDuration));
+        reward = totalReward;
+        rewardRate = uint128(totalReward.div(incentiveDuration));
+        incentiveStartedAt = uint32(block.timestamp);
         incentiveEndsAt = uint32(block.timestamp) + incentiveDuration;
+
         _updatedAt = uint32(block.timestamp);
 
         if (extraReward > 0)
@@ -136,7 +141,7 @@ contract RewardPoolV2 is ERC20WrapperUpgradeable, OwnableUpgradeable {
                 extraReward
             );
 
-        emit StakingIncentiveUpdated(reward, incentiveEndsAt);
+        emit StakingIncentiveUpdated(totalReward, incentiveEndsAt);
     }
 
     /**
