@@ -231,8 +231,8 @@ describe("RewardPool V2", function () {
       expect(await azur.balanceOf(user.address)).to.be.equal(userBalanceBefore - ACCIDENTALLY_TRANSFERRED);
 
       await stAzur.connect(owner).recover(owner.address);
-      expect(await azur.balanceOf(owner.address)).to.be.equal(ownerBalanceBefore);
-      expect(await stAzur.balanceOf(owner.address)).to.be.equal(ACCIDENTALLY_TRANSFERRED);
+      expect(await azur.balanceOf(owner.address)).to.be.equal(ownerBalanceBefore + ACCIDENTALLY_TRANSFERRED);
+      expect(await stAzur.balanceOf(owner.address)).to.be.equal(0);
     });
     it("Should recover accidentally transferred funds with requested withdrawals", async function () {
       await depositFor(user, DEPOSIT);
@@ -242,8 +242,8 @@ describe("RewardPool V2", function () {
       expect(await azur.balanceOf(user.address)).to.be.equal(userBalanceBefore - DEPOSIT - ACCIDENTALLY_TRANSFERRED);
 
       await stAzur.connect(owner).recover(owner.address);
-      expect(await azur.balanceOf(owner.address)).to.be.equal(ownerBalanceBefore);
-      expect(await stAzur.balanceOf(owner.address)).to.be.equal(ACCIDENTALLY_TRANSFERRED);
+      expect(await azur.balanceOf(owner.address)).to.be.equal(ownerBalanceBefore + ACCIDENTALLY_TRANSFERRED);
+      expect(await stAzur.balanceOf(owner.address)).to.be.equal(0);
 
       await timeShiftBy(ethers, WITHDRAWAL_DELAY);
       await stAzur.connect(user).withdrawTo(user.address, requestId);
@@ -555,7 +555,6 @@ describe("RewardPool V2", function () {
       const res1 = await requestWithdrawal(user, DEPOSIT / 2n);
 
       await stAzur.connect(owner).recover(owner.address);
-      expect(await azur.balanceOf(owner.address)).to.be.equal(ownerBalanceBefore - INCENTIVE_REWARD);
 
       const res2 = await requestWithdrawal(user, DEPOSIT / 2n);
       await timeShiftBy(ethers, WITHDRAWAL_DELAY);
@@ -563,8 +562,11 @@ describe("RewardPool V2", function () {
       await stAzur.connect(user).withdrawTo(user.address, res2.requestId);
 
       expect(await azur.balanceOf(user.address)).to.be.closeToRelative(userBalanceBefore + INCENTIVE_REWARD);
-      expect((await stAzur.balanceOf(owner.address)) - ACCIDENTALLY_TRANSFERRED).to.be.equal(
-        userBalanceBefore + INCENTIVE_REWARD - (await azur.balanceOf(user.address)),
+      expect(await azur.balanceOf(owner.address)).to.be.equal(
+        ACCIDENTALLY_TRANSFERRED +
+          ownerBalanceBefore -
+          INCENTIVE_REWARD +
+          (userBalanceBefore + INCENTIVE_REWARD - (await azur.balanceOf(user.address))),
       );
     });
   });
