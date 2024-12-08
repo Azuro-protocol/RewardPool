@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity 0.8.24;
+pragma solidity 0.8.28;
 
 interface IRewardPoolV2 {
     function changeWithdrawalDelay(uint256 newWithdrawalDelay) external;
@@ -14,7 +14,9 @@ interface IRewardPoolV2 {
         uint32 incentiveDuration
     ) external;
 
-    function requestWithdrawal(uint256 value) external returns (uint256);
+    function requestWithdrawal(
+        uint256 value
+    ) external returns (uint256 requestId);
 
     function withdrawTo(address account, uint256 requestId) external;
 
