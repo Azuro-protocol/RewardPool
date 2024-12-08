@@ -31,9 +31,15 @@ interface IRewardPool {
         uint64 time;
     }
 
+    event AllStakesMigrated(address rewardPoolV2);
+
+    event MaintainerChanged(address maintainer);
+
     event RewardPoolV2Changed(IRewardPoolV2 newRewardPoolV2);
 
     event StakingStatusChanged(bool isStakingProhibited);
+
+    event Stopped();
 
     /** @notice Event emitted when new stake is created */
     event Staked(
@@ -72,12 +78,16 @@ interface IRewardPool {
     /** @notice Event emitted when reward is distributed */
     event RewardDistributed(uint256 reward);
 
+    error ContractIsNotStopped();
+    error ContractIsStopped();
     error NoChanges();
     error NoStakes();
     error NotStakeOwner();
+    error IncorrectData();
     error IncorrectUnstake();
     error IncorrectUnstakeTime();
     error MaxUnstakePeriodExceeded();
+    error OnlyMaintainer();
     error RewardPoolV2NotSet();
     error StakingIsProhibited();
 }
