@@ -7,7 +7,8 @@ import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC20WrapperUpgradeable.sol";
 
 contract RewardPoolV2 is ERC20WrapperUpgradeable, OwnableUpgradeable {
-    using FixedMath for *;
+    using FixedMath for uint128;
+    using FixedMath for uint256;
 
     uint32 internal constant MIN_INCENTIVE_DURATION = 1;
     uint32 internal constant MAX_INCENTIVE_DURATION = 94608000; // 3 years
