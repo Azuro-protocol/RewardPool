@@ -16,7 +16,7 @@ const {
   makeMigrationToV2,
 } = require("../utils/utils");
 
-const INIT_MINT = tokens("100000");
+const INIT_MINT = tokens("100000000");
 const BASE_STAKE = tokens("100");
 const BASE_REWARD = tokens("100");
 const BASE_DEPO = BASE_STAKE * 10n;
@@ -413,6 +413,40 @@ describe("RewardPool", function () {
         "StakingIsProhibited",
       );
     });
+    it("Force migration", async function () {
+      const { rewardPool, owner, azur, stAzur } = await loadFixture(deployDistributorFixture);
+
+      const stakeOwners = [];
+      const amounts = [];
+      let totalAmount = BigInt(0);
+
+      await azur.connect(owner).approve(rewardPool.address, BASE_STAKE * 2000n);
+
+      let onV2 = 72;
+      const stakeNums = [238, 201, 50, 20, 4, 5];
+      await azur.connect(owner).approve(stAzur.address, tokens(100000));
+      for (const stakeNum of stakeNums.keys()) {
+        for (const i of Array(stakeNums[stakeNum]).keys()) {
+          const stakeOwner = ethers.Wallet.createRandom().address;
+          if (onV2 > 0) {
+            await stAzur.connect(owner).depositFor(stakeOwner, tokens(1));
+            onV2--;
+          }
+          stakeOwners.push(stakeOwner);
+          for (const j of Array(stakeNum + 1).keys()) {
+            await makeStakeFor(rewardPool, owner, BASE_STAKE, stakeOwner);
+          }
+
+          amounts.push(BASE_STAKE * BigInt(stakeNum + 1));
+          totalAmount += BASE_STAKE * BigInt(stakeNum + 1);
+        }
+      }
+
+      await rewardPool.connect(owner).stop();
+      await rewardPool.connect(owner).changeMaintainer(owner.address);
+
+      await rewardPool.forceMigrateToV2(stakeOwners, amounts, totalAmount);
+    });
     it("Should not allow migration if V2 contract is not set", async function () {
       const { rewardPool, owner, users } = await loadFixture(deployDistributorFixture);
 
@@ -471,6 +505,114 @@ describe("RewardPool", function () {
         rewardPool,
         "NotStakeOwner",
       );
+    });
+    it("Should not allow stop the contract by non-owner", async function () {
+      const { rewardPool, users } = await loadFixture(deployDistributorFixture);
+
+      await expect(rewardPool.connect(users[0]).stop()).to.be.revertedWithCustomError(
+        rewardPool,
+        "OwnableUnauthorizedAccount",
+      );
+    });
+    it("Should not allow update a maintainer by non-owner", async function () {
+      const { rewardPool, users } = await loadFixture(deployDistributorFixture);
+
+      await expect(rewardPool.connect(users[0]).changeMaintainer(users[0].address)).to.be.revertedWithCustomError(
+        rewardPool,
+        "OwnableUnauthorizedAccount",
+      );
+    });
+    it("Should not allow force migration by non-maintainer", async function () {
+      const { rewardPool, owner } = await loadFixture(deployDistributorFixture);
+
+      await rewardPool.connect(owner).stop();
+
+      await expect(rewardPool.connect(owner).forceMigrateToV2([], [], tokens(1))).to.be.revertedWithCustomError(
+        rewardPool,
+        "OnlyMaintainer",
+      );
+    });
+    it("Should not allow force migration if the contract is not stopped", async function () {
+      const { rewardPool, owner } = await loadFixture(deployDistributorFixture);
+
+      await rewardPool.connect(owner).changeMaintainer(owner.address);
+
+      await expect(rewardPool.connect(owner).forceMigrateToV2([], [], tokens(1))).to.be.revertedWithCustomError(
+        rewardPool,
+        "ContractIsNotStopped",
+      );
+    });
+    it("Should not allow force migration with inconsistent data", async function () {
+      const { rewardPool, owner } = await loadFixture(deployDistributorFixture);
+
+      await rewardPool.connect(owner).stop();
+      await rewardPool.connect(owner).changeMaintainer(owner.address);
+
+      await expect(
+        rewardPool.connect(owner).forceMigrateToV2([owner.address], [], tokens(1)),
+      ).to.be.revertedWithCustomError(rewardPool, "IncorrectData");
+    });
+    it("Should not allow any user action except withdrawals if the contract is stopped", async function () {
+      const { rewardPool, owner, stAzur } = await loadFixture(deployDistributorFixture);
+
+      const stakeId = (await makeStake(rewardPool, owner, BASE_STAKE)).stakeId;
+      const stakeId2 = (await makeStake(rewardPool, owner, BASE_STAKE)).stakeId;
+      await makeStake(rewardPool, owner, BASE_STAKE);
+      await makeDistributeReward(rewardPool, owner, BASE_REWARD);
+      await makeRequestUnstake(rewardPool, owner, stakeId);
+      await makeRequestUnstake(rewardPool, owner, stakeId2);
+      await timeShiftBy(ethers, UNSTAKEPERIOD);
+
+      await rewardPool.connect(owner).stop();
+
+      await expect(rewardPool.connect(owner).changeStakingStatus(true)).to.be.revertedWithCustomError(
+        rewardPool,
+        "ContractIsStopped",
+      );
+      await expect(rewardPool.connect(owner).stop()).to.be.revertedWithCustomError(rewardPool, "ContractIsStopped");
+      await expect(rewardPool.connect(owner).changeUnstakePeriod(BASE_DEPO)).to.be.revertedWithCustomError(
+        rewardPool,
+        "ContractIsStopped",
+      );
+      await expect(rewardPool.connect(owner).distributeReward(BASE_REWARD)).to.be.revertedWithCustomError(
+        rewardPool,
+        "ContractIsStopped",
+      );
+      await expect(rewardPool.connect(owner).batchRequestUnstake([stakeId])).to.be.revertedWithCustomError(
+        rewardPool,
+        "ContractIsStopped",
+      );
+      await expect(rewardPool.connect(owner).migrateToV2([stakeId])).to.be.revertedWithCustomError(
+        rewardPool,
+        "ContractIsStopped",
+      );
+      await expect(rewardPool.connect(owner).requestUnstake(stakeId)).to.be.revertedWithCustomError(
+        rewardPool,
+        "ContractIsStopped",
+      );
+      await expect(rewardPool.connect(owner).batchWithdrawReward([stakeId])).to.be.revertedWithCustomError(
+        rewardPool,
+        "ContractIsStopped",
+      );
+      await expect(rewardPool.connect(owner).stake(BASE_STAKE)).to.be.revertedWithCustomError(
+        rewardPool,
+        "ContractIsStopped",
+      );
+      await expect(rewardPool.connect(owner).stakeFor(owner.address, BASE_STAKE)).to.be.revertedWithCustomError(
+        rewardPool,
+        "ContractIsStopped",
+      );
+      await expect(rewardPool.connect(owner).withdrawReward(stakeId)).to.be.revertedWithCustomError(
+        rewardPool,
+        "ContractIsStopped",
+      );
+
+      await expect(rewardPool.connect(owner).changeMaintainer(owner.address)).to.be.not.reverted;
+      await expect(rewardPool.connect(owner).changeRewardPoolV2(stAzur.address)).to.be.not.reverted;
+      await expect(rewardPool.connect(owner).batchUnstake([stakeId])).to.be.not.reverted;
+      await expect(rewardPool.connect(owner).unstake(stakeId2)).to.be.not.reverted;
+      await expect(rewardPool.connect(owner).forceMigrateToV2([owner.address], [BASE_STAKE], BASE_STAKE)).to.be.not
+        .reverted;
     });
   });
 });

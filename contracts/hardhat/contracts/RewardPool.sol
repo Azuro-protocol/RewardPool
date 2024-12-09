@@ -9,7 +9,7 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
 /*
-This contract is used for distributing rewards for rewardPool to various stakers.
+This contract is used for distributing rewards for rewardPool to various stakeOwners.
 At each rewards distribution, it is distributed proportionate to "stake powers".
 
 Stake power for a given stake is a value calculated following way:
@@ -63,10 +63,18 @@ contract RewardPool is OwnableUpgradeable, IRewardPool {
 
     IRewardPoolV2 public rewardPoolV2;
     bool public isStakingProhibited;
+    bool public isContractStopped;
+
+    address public maintainer;
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
         _disableInitializers();
+    }
+
+    modifier isNotStopped() {
+        if (isContractStopped) revert ContractIsStopped();
+        _;
     }
 
     /**
@@ -84,6 +92,14 @@ contract RewardPool is OwnableUpgradeable, IRewardPool {
     }
 
     /**
+     * @notice Owner's function that is used to change the address of the maintainer.
+     */
+    function changeMaintainer(address maintainer_) external onlyOwner {
+        maintainer = maintainer_;
+        emit MaintainerChanged(maintainer_);
+    }
+
+    /**
      * @notice Owner's function that is used to change the address of liquid staking contract to migrate.
      */
     function changeRewardPoolV2(
@@ -97,17 +113,29 @@ contract RewardPool is OwnableUpgradeable, IRewardPool {
      * @dev Changes the staking status.
      * @param isStakingProhibited_ The new staking status (true for prohibited, false for allowed).
      */
-    function changeStakingStatus(bool isStakingProhibited_) external onlyOwner {
+    function changeStakingStatus(
+        bool isStakingProhibited_
+    ) external onlyOwner isNotStopped {
         if (isStakingProhibited_ == isStakingProhibited) revert NoChanges();
         isStakingProhibited = isStakingProhibited_;
         emit StakingStatusChanged(isStakingProhibited_);
     }
 
     /**
+     * @dev Stops the contract (only force migration is allowed).
+     */
+    function stop() external onlyOwner isNotStopped {
+        isContractStopped = true;
+        emit Stopped();
+    }
+
+    /**
      * @notice Owner's function that is used to change unstake period
      * @param newUnstakePeriod new unstake period, will be actual for new unstake requests
      */
-    function changeUnstakePeriod(uint256 newUnstakePeriod) external onlyOwner {
+    function changeUnstakePeriod(
+        uint256 newUnstakePeriod
+    ) external onlyOwner isNotStopped {
         if (newUnstakePeriod > MAXUNSTAKEPERIOD)
             revert MaxUnstakePeriodExceeded();
         unstakePeriod = newUnstakePeriod;
@@ -119,7 +147,7 @@ contract RewardPool is OwnableUpgradeable, IRewardPool {
      * @dev Function transfers distributed reward to contract, approval is required in prior
      * @param reward rewards to distribution
      */
-    function distributeReward(uint256 reward) external onlyOwner {
+    function distributeReward(uint256 reward) external onlyOwner isNotStopped {
         token.safeTransferFrom(msg.sender, address(this), reward);
         _distributeReward(reward);
 
@@ -189,7 +217,7 @@ contract RewardPool is OwnableUpgradeable, IRewardPool {
     function stakeFor(
         address account,
         uint96 amount
-    ) public returns (uint256 stakeId) {
+    ) public isNotStopped returns (uint256 stakeId) {
         if (isStakingProhibited) revert StakingIsProhibited();
 
         token.safeTransferFrom(msg.sender, address(this), amount);
@@ -224,7 +252,7 @@ contract RewardPool is OwnableUpgradeable, IRewardPool {
      *  @notice Withdraws accumulated reward for given stake
      *  @param stakeId ID of the stake to collect reward for
      */
-    function withdrawReward(uint256 stakeId) public {
+    function withdrawReward(uint256 stakeId) public isNotStopped {
         _withdrawReward(stakeId);
     }
 
@@ -232,7 +260,7 @@ contract RewardPool is OwnableUpgradeable, IRewardPool {
      * @dev Migrates a stake to the RewardPoolV2 contract.
      * @param stakeIds The IDs of stakes to migrate owned by sender.
      */
-    function migrateToV2(uint256[] calldata stakeIds) external {
+    function migrateToV2(uint256[] calldata stakeIds) external isNotStopped {
         IRewardPoolV2 rewardPoolV2_ = rewardPoolV2;
         if (address(rewardPoolV2_) == address(0)) revert RewardPoolV2NotSet();
 
@@ -248,6 +276,26 @@ contract RewardPool is OwnableUpgradeable, IRewardPool {
         emit StakesMigrated(msg.sender, address(rewardPoolV2_), stakeIds);
     }
 
+    function forceMigrateToV2(
+        address[] calldata stakeOwners,
+        uint256[] calldata amounts,
+        uint256 totalAmount
+    ) external {
+        if (!isContractStopped) revert ContractIsNotStopped();
+        if (msg.sender != maintainer) revert OnlyMaintainer();
+
+        uint256 length = stakeOwners.length;
+        if (length != amounts.length) revert IncorrectData();
+
+        IRewardPoolV2 rewardPoolV2_ = rewardPoolV2;
+        token.approve(address(rewardPoolV2_), totalAmount);
+        for (uint256 i = 0; i < length; ++i) {
+            rewardPoolV2_.depositFor(stakeOwners[i], amounts[i]);
+        }
+
+        emit AllStakesMigrated(address(rewardPoolV2_));
+    }
+
     /**
      *  @notice Returns current reward of given stake
      *  @param stakeId ID of the stake to get reward for
@@ -261,7 +309,7 @@ contract RewardPool is OwnableUpgradeable, IRewardPool {
      *  @notice Internal function that processes reward distribution
      *  @param reward Distributed reward
      */
-    function _distributeReward(uint256 reward) private {
+    function _distributeReward(uint256 reward) private isNotStopped {
         uint32 distributionId = ++lastDistributionId;
         Distribution storage distribution = distributions[distributionId];
         uint256 stakedIn = distribution.stakedIn;
@@ -306,7 +354,7 @@ contract RewardPool is OwnableUpgradeable, IRewardPool {
      *  @notice Internal function that collects reward for given stake
      *  @param stakeId ID of the stake
      */
-    function _withdrawReward(uint256 stakeId) private {
+    function _withdrawReward(uint256 stakeId) private isNotStopped {
         if (stakes[stakeId].owner != msg.sender) revert NotStakeOwner();
 
         uint96 reward = rewardOf(stakeId);
@@ -320,7 +368,7 @@ contract RewardPool is OwnableUpgradeable, IRewardPool {
      *  @notice Internal function that request unstake of given stake
      *  @param stakeId ID of the stake
      */
-    function _requestUnstake(uint256 stakeId) private {
+    function _requestUnstake(uint256 stakeId) private isNotStopped {
         _withdrawReward(stakeId);
 
         uint96 amount = _removeStake(stakeId);
