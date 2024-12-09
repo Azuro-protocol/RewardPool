@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity 0.8.24;
+pragma solidity 0.8.28;
 
 import "./libraries/FixedMath.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC20WrapperUpgradeable.sol";
 
 contract RewardPoolV2 is ERC20WrapperUpgradeable, OwnableUpgradeable {
-    using FixedMath for *;
+    using FixedMath for uint128;
+    using FixedMath for uint256;
 
     uint32 internal constant MIN_INCENTIVE_DURATION = 1;
     uint32 internal constant MAX_INCENTIVE_DURATION = 94608000; // 3 years
@@ -47,7 +48,7 @@ contract RewardPoolV2 is ERC20WrapperUpgradeable, OwnableUpgradeable {
         address indexed to
     );
 
-    error InsufficientDeposit(uint256 value);
+    error InsufficientDeposit(uint256 amount);
     error InvalidIncentiveDuration(uint32 minDuration, uint32 maxDuration);
     error NoReward();
     error OnlyRequesterCanWithdrawToAnotherAddress(address requester);
@@ -59,7 +60,8 @@ contract RewardPoolV2 is ERC20WrapperUpgradeable, OwnableUpgradeable {
      * @notice Updates the exchange rate of the staking token to underlying token.
      */
     modifier updateExchangeRate() {
-        _updateExchangeRate();
+        _exchangeRate = exchangeRate();
+        _updatedAt = uint32(_lastIncentiveTimestamp());
         _;
     }
 
@@ -92,17 +94,20 @@ contract RewardPoolV2 is ERC20WrapperUpgradeable, OwnableUpgradeable {
     }
 
     /**
-     * @dev Owner: Mint wrapped token to cover any underlyingTokens that would have been transferred by mistake.
+     * @dev Owner: Recover underlying tokens that would have been transferred by mistake.
      * @param account The address to receive the tokens.
+     * @return recoveredAmount The amount of recovered tokens
      */
-    function recover(address account) external onlyOwner returns (uint256) {
-        uint256 value = underlying().balanceOf(address(this)) -
+    function recover(
+        address account
+    ) external onlyOwner returns (uint256 recoveredAmount) {
+        recoveredAmount =
+            underlying().balanceOf(address(this)) -
             (calculateWithdrawalAmount(totalSupply()) +
                 totalRequestedAmount +
                 _remainingReward());
-        _mint(account, value);
 
-        return value;
+        underlying().transfer(account, recoveredAmount);
     }
 
     /**
@@ -134,12 +139,7 @@ contract RewardPoolV2 is ERC20WrapperUpgradeable, OwnableUpgradeable {
         _updatedAt = uint32(block.timestamp);
 
         if (extraReward > 0)
-            SafeERC20.safeTransferFrom(
-                underlying(),
-                msg.sender,
-                address(this),
-                extraReward
-            );
+            underlying().transferFrom(msg.sender, address(this), extraReward);
 
         emit StakingIncentiveUpdated(totalReward, incentiveEndsAt);
     }
@@ -147,16 +147,16 @@ contract RewardPoolV2 is ERC20WrapperUpgradeable, OwnableUpgradeable {
     /**
      * @dev Initiates a redemption request by burning a specified amount of staking tokens.
      * @param redeemAmount The number of staking tokens to burn for redemption.
-     * @return The ID of the created redemption request.
+     * @return requestId The ID of the created redemption request.
      */
     function requestWithdrawal(
         uint128 redeemAmount
-    ) external updateExchangeRate returns (uint256) {
+    ) external updateExchangeRate returns (uint256 requestId) {
         if (redeemAmount == 0) revert ZeroAmount();
 
         _burn(msg.sender, redeemAmount);
 
-        uint256 requestId = nextWithdrawalRequestId++;
+        requestId = nextWithdrawalRequestId++;
         uint128 withdrawalAmount = calculateWithdrawalAmount(redeemAmount);
 
         uint32 withdrawAfter = uint32(block.timestamp) + withdrawalDelay;
@@ -175,8 +175,6 @@ contract RewardPoolV2 is ERC20WrapperUpgradeable, OwnableUpgradeable {
             withdrawalAmount,
             withdrawAfter
         );
-
-        return requestId;
     }
 
     /**
@@ -189,12 +187,12 @@ contract RewardPoolV2 is ERC20WrapperUpgradeable, OwnableUpgradeable {
         uint256[] calldata requestIds
     ) external {
         uint256 numRequests = requestIds.length;
-        uint256 totalValue;
+        uint256 totalAmount;
         for (uint256 i; i < numRequests; ++i) {
-            totalValue += _processWithdrawalRequest(account, requestIds[i]);
+            totalAmount += _processWithdrawalRequest(account, requestIds[i]);
         }
 
-        SafeERC20.safeTransfer(underlying(), account, totalValue);
+        underlying().transfer(account, totalAmount);
     }
 
     /**
@@ -211,19 +209,14 @@ contract RewardPoolV2 is ERC20WrapperUpgradeable, OwnableUpgradeable {
      */
     function depositFor(
         address account,
-        uint256 value
+        uint256 amount
     ) public override updateExchangeRate returns (bool) {
-        address sender = msg.sender;
-        if (sender == address(this)) {
-            revert ERC20InvalidSender(address(this));
-        }
-        if (account == address(this)) {
-            revert ERC20InvalidReceiver(account);
-        }
-        SafeERC20.safeTransferFrom(underlying(), sender, address(this), value);
+        if (account == address(this)) revert ERC20InvalidReceiver(account);
 
-        uint256 mintAmount = value.div(exchangeRate());
-        if (mintAmount == 0) revert InsufficientDeposit(value);
+        underlying().transferFrom(msg.sender, address(this), amount);
+
+        uint256 mintAmount = amount.div(exchangeRate());
+        if (mintAmount == 0) revert InsufficientDeposit(amount);
 
         _mint(account, mintAmount);
 
@@ -239,14 +232,14 @@ contract RewardPoolV2 is ERC20WrapperUpgradeable, OwnableUpgradeable {
         address account,
         uint256 requestId
     ) public override returns (bool) {
-        uint256 value = _processWithdrawalRequest(account, requestId);
-        SafeERC20.safeTransfer(underlying(), account, value);
+        uint256 amount = _processWithdrawalRequest(account, requestId);
+        underlying().transfer(account, amount);
 
         return true;
     }
 
     /**
-     * @dev Calculates the amount of underlying tokens that can be redeemed for a given staking token value.
+     * @dev Calculates the amount of underlying tokens that can be redeemed for a given staking token amount.
      */
     function calculateWithdrawalAmount(
         uint256 redeemAmount
@@ -277,36 +270,27 @@ contract RewardPoolV2 is ERC20WrapperUpgradeable, OwnableUpgradeable {
      * @dev Handle a withdrawal request.
      * @param account The address to transfer tokens to.
      * @param requestId The ID of the withdrawal request.
-     * @return value The amount of tokens to withdraw.
+     * @return withdrawalAmount The amount of tokens to withdraw.
      */
     function _processWithdrawalRequest(
         address account,
         uint256 requestId
-    ) internal returns (uint256) {
+    ) internal returns (uint256 withdrawalAmount) {
         WithdrawalRequest storage request = withdrawalRequests[requestId];
-        uint128 value = request.value;
+        withdrawalAmount = request.value;
         uint32 withdrawAfter = request.withdrawAfter;
         address requester = request.requester;
 
-        if (value == 0) revert RequestDoesNotExist(requestId);
+        if (withdrawalAmount == 0) revert RequestDoesNotExist(requestId);
         if (block.timestamp < withdrawAfter)
             revert WithdrawalLocked(withdrawAfter);
         if (account != requester && requester != msg.sender)
             revert OnlyRequesterCanWithdrawToAnotherAddress(requester);
 
-        totalRequestedAmount -= uint128(value);
+        totalRequestedAmount -= uint128(withdrawalAmount);
         delete withdrawalRequests[requestId];
+
         emit WithdrawalRequestProcessed(requestId, account);
-
-        return value;
-    }
-
-    /**
-     * @dev Updates the exchange rate of the staking token to underlying token.
-     */
-    function _updateExchangeRate() internal {
-        _exchangeRate = exchangeRate();
-        _updatedAt = uint32(_lastIncentiveTimestamp());
     }
 
     /**
