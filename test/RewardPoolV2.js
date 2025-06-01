@@ -2,8 +2,16 @@ const chai = require("chai");
 const { loadFixture } = require("@nomicfoundation/hardhat-toolbox/network-helpers");
 const { expect } = require("chai");
 
-const { tokens, deployRewardPoolV2, timeShift, timeShiftBy, getTransactionTime } = require("../utils/utils");
+const {
+  tokens,
+  deployRewardPoolV2,
+  deployRewardPoolV3,
+  timeShift,
+  timeShiftBy,
+  getTransactionTime,
+} = require("../utils/utils");
 const { ethers } = require("hardhat");
+const { ZeroAddress } = require("ethers");
 
 const INIT_MINT = tokens(1000000);
 const INIT_BALANCE = tokens(1000);
@@ -49,6 +57,7 @@ describe("Custom Chai Assertion: closeToRelative", function () {
 describe("RewardPool V2", function () {
   let azur,
     stAzur,
+    pAzur,
     owner,
     user,
     user2,
@@ -86,6 +95,7 @@ describe("RewardPool V2", function () {
     ({
       azur,
       stAzur,
+      pAzur,
       owner,
       user,
       user2,
@@ -102,13 +112,20 @@ describe("RewardPool V2", function () {
   async function deployFixture() {
     const [owner, user, user2, user3, user4] = await ethers.getSigners();
 
-    const AZUR = await ethers.getContractFactory("TestERC20", { signer: owner });
+    const AZUR = await ethers.getContractFactory("TestERC20", {
+      signer: owner,
+    });
     const azur = await AZUR.deploy("AZUR", "AZUR", INIT_MINT);
     await azur.waitForDeployment();
     azur.address = await azur.getAddress();
 
     const stAzur = await deployRewardPoolV2(azur.address, owner, "Staked $AZUR", "stAZUR", WITHDRAWAL_DELAY);
     stAzur.address = await stAzur.getAddress();
+
+    const pAzur = await deployRewardPoolV3(azur.address, owner.address, 0);
+    pAzur.address = await pAzur.getAddress();
+
+    await stAzur.connect(owner).changeRewardPoolV3(pAzur);
 
     await azur.connect(owner).approve(stAzur.address, INIT_BALANCE);
     for (const account of [user, user2, user3, user4]) {
@@ -125,6 +142,7 @@ describe("RewardPool V2", function () {
     return {
       azur,
       stAzur,
+      pAzur,
       owner,
       user,
       user2,
@@ -251,6 +269,17 @@ describe("RewardPool V2", function () {
       expect(await azur.balanceOf(user.address)).to.be.equal(
         userBalanceBefore - DEPOSIT + WITHDRAWAL - ACCIDENTALLY_TRANSFERRED,
       );
+    });
+    it("Should migrate to V3", async function () {
+      await depositFor(user, DEPOSIT);
+
+      await updateStakingIncentive(INCENTIVE_REWARD, INCENTIVE_DURATION);
+      await timeShiftBy(ethers, INCENTIVE_DURATION);
+
+      await stAzur.connect(user).migrateToV3(DEPOSIT);
+      expect(await stAzur.balanceOf(user)).to.equal(0);
+      expect(await azur.balanceOf(pAzur)).to.closeToRelative(DEPOSIT + INCENTIVE_REWARD);
+      expect(await pAzur.totalStaked()).to.closeToRelative(DEPOSIT + INCENTIVE_REWARD);
     });
   });
 
@@ -646,7 +675,30 @@ describe("RewardPool V2", function () {
       await expect(requestWithdrawal(user, 0)).to.be.revertedWithCustomError(stAzur, "ZeroAmount");
     });
     it("Request for a fund amount exceeding the balance", async function () {
-      await expect(requestWithdrawal(user, 0)).to.be.revertedWithCustomError(stAzur, "ZeroAmount");
+      await depositFor(user, DEPOSIT);
+      await expect(requestWithdrawal(user, DEPOSIT + 1n)).to.be.revertedWithCustomError(
+        stAzur,
+        "ERC20InsufficientBalance",
+      );
+    });
+    it("Migrate to V3 with a zero value", async function () {
+      await expect(stAzur.migrateToV3(0)).to.be.revertedWithCustomError(stAzur, "ZeroAmount");
+    });
+    it("Migrate to V3 for a fund amount exceeding the balance", async function () {
+      await depositFor(user, DEPOSIT);
+      await expect(stAzur.connect(user).migrateToV3(DEPOSIT + 1n)).to.be.revertedWithCustomError(
+        stAzur,
+        "ERC20InsufficientBalance",
+      );
+    });
+    it("Migrate to V3 if the contract is not set", async function () {
+      await stAzur.connect(owner).changeRewardPoolV3(ZeroAddress);
+
+      await depositFor(user, DEPOSIT);
+      await expect(stAzur.connect(user).migrateToV3(DEPOSIT)).to.be.revertedWithCustomError(
+        stAzur,
+        "RewardPoolV3NotSet",
+      );
     });
     it("Incentive reward to be equal zero", async function () {
       await expect(stAzur.updateStakingIncentive(0, ONE_YEAR)).to.be.revertedWithCustomError(stAzur, "NoReward");
@@ -682,6 +734,10 @@ describe("RewardPool V2", function () {
         "OwnableUnauthorizedAccount",
       );
       await expect(stAzur.connect(user).recover(user.address)).to.be.revertedWithCustomError(
+        stAzur,
+        "OwnableUnauthorizedAccount",
+      );
+      await expect(stAzur.connect(user).changeRewardPoolV3(user.address)).to.be.revertedWithCustomError(
         stAzur,
         "OwnableUnauthorizedAccount",
       );

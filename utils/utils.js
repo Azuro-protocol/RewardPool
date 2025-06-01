@@ -44,17 +44,26 @@ async function timeShiftBy(ethers, timeDelta) {
 }
 
 const deployRewardPool = async (azurAddress, owner, unstakedPeriod) => {
-  const REWARDPOOL = await ethers.getContractFactory("RewardPool", { signer: owner });
+  const REWARDPOOL = await ethers.getContractFactory("RewardPool", {
+    signer: owner,
+  });
   const rewardPool = await upgrades.deployProxy(REWARDPOOL, [azurAddress, unstakedPeriod]);
   await rewardPool.waitForDeployment();
   return rewardPool;
 };
 
 const deployRewardPoolV2 = async (azurAddress, owner, name, symbol, unstakePeriod) => {
-  const RewardPoolV2 = await ethers.getContractFactory("RewardPoolV2", { signer: owner });
+  const RewardPoolV2 = await ethers.getContractFactory("RewardPoolV2");
   const rewardPoolV2 = await upgrades.deployProxy(RewardPoolV2, [azurAddress, name, symbol, unstakePeriod]);
   await rewardPoolV2.waitForDeployment();
   return rewardPoolV2;
+};
+
+const deployRewardPoolV3 = async (azurAddress, usdtAddress, unstakePeriod) => {
+  const RewardPoolV3 = await ethers.getContractFactory("RewardPoolV3");
+  const rewardPoolV3 = await upgrades.deployProxy(RewardPoolV3, [azurAddress, usdtAddress, unstakePeriod]);
+  await rewardPoolV3.waitForDeployment();
+  return rewardPoolV3;
 };
 
 const makeStake = async (rewardPool, staker, amount) => {
@@ -169,6 +178,7 @@ module.exports = {
   makeStakeFor,
   deployRewardPool,
   deployRewardPoolV2,
+  deployRewardPoolV3,
   getStakeDetails,
   makeUnstake,
   getUnstakeDetails,

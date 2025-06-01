@@ -2,6 +2,7 @@
 
 pragma solidity 0.8.28;
 
+import "./interface/IRewardPoolV3.sol";
 import "./libraries/FixedMath.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC20WrapperUpgradeable.sol";
@@ -34,6 +35,15 @@ contract RewardPoolV2 is ERC20WrapperUpgradeable, OwnableUpgradeable {
     uint128 public reward;
     uint256 public rewardRate;
 
+    IRewardPoolV3 rewardPoolV3;
+
+    event Migrated(
+        address account,
+        IRewardPoolV3 rewardPoolV3,
+        uint256 redeemAmount,
+        uint256 stakeAmount
+    );
+    event RewardPoolV3Changed(IRewardPoolV3 newRewardPoolV3);
     event StakingIncentiveUpdated(uint128 reward, uint32 incentiveEndsAt);
     event WithdrawalDelayChanged(uint256 newWithdrawalDelay);
     event WithdrawalRequested(
@@ -53,6 +63,7 @@ contract RewardPoolV2 is ERC20WrapperUpgradeable, OwnableUpgradeable {
     error NoReward();
     error OnlyRequesterCanWithdrawToAnotherAddress(address requester);
     error RequestDoesNotExist(uint256 requestId);
+    error RewardPoolV3NotSet();
     error WithdrawalLocked(uint32 withdrawAfter);
     error ZeroAmount();
 
@@ -80,6 +91,16 @@ contract RewardPoolV2 is ERC20WrapperUpgradeable, OwnableUpgradeable {
         __ERC20_init_unchained(name_, symbol_);
         __ERC20Wrapper_init_unchained(underlyingToken_);
         withdrawalDelay = withdrawalDelay_;
+    }
+
+    /**
+     * @notice Owner's function that is used to change the address of V3 staking contract to migrate.
+     */
+    function changeRewardPoolV3(
+        IRewardPoolV3 newRewardPoolV3
+    ) external onlyOwner {
+        rewardPoolV3 = newRewardPoolV3;
+        emit RewardPoolV3Changed(newRewardPoolV3);
     }
 
     /**
@@ -236,6 +257,24 @@ contract RewardPoolV2 is ERC20WrapperUpgradeable, OwnableUpgradeable {
         underlying().transfer(account, amount);
 
         return true;
+    }
+
+    /**
+     * @dev Migrates a specified amount of tokens to the RewardPoolV3 contract.
+     * @param redeemAmount The amount of tokens to convert into underlying tokens and migrate.
+     */
+    function migrateToV3(uint256 redeemAmount) external updateExchangeRate {
+        IRewardPoolV3 rewardPoolV3_ = rewardPoolV3;
+        if (address(rewardPoolV3_) == address(0)) revert RewardPoolV3NotSet();
+        if (redeemAmount == 0) revert ZeroAmount();
+
+        _burn(msg.sender, redeemAmount);
+        uint256 stakeAmount = calculateWithdrawalAmount(redeemAmount);
+
+        underlying().approve(address(rewardPoolV3_), stakeAmount);
+        rewardPoolV3_.stakeFor(msg.sender, uint96(stakeAmount));
+
+        emit Migrated(msg.sender, rewardPoolV3_, redeemAmount, stakeAmount);
     }
 
     /**
