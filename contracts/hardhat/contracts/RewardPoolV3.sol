@@ -2,6 +2,7 @@
 pragma solidity 0.8.28;
 
 import "./interface/IRewardPoolV3.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 
 contract RewardPoolV3 is OwnableUpgradeable, IRewardPoolV3 {
@@ -167,7 +168,7 @@ contract RewardPoolV3 is OwnableUpgradeable, IRewardPoolV3 {
 
         if (amount == 0) revert NoAvailableBalance(address(token));
 
-        token.transfer(to, amount);
+        SafeERC20.safeTransfer(token, to, amount);
     }
 
     /**
