@@ -73,4 +73,8 @@ module.exports = {
     enabled: true,
     currency: "USD",
   },
+  sourcify: {
+    enabled: true
+  }
+
 };
