@@ -50,7 +50,7 @@ describe("RewardPool V3", function () {
   const stakeFor = async (account, value, to = account) => {
     const tx = await pAzur.connect(account).stakeFor(to, value);
     const result = await tx.wait();
-    return result.logs[1].args.stakeId;
+    return result.logs[2].args.stakeId;
   };
 
   const claimReward = async (account) => {
@@ -123,10 +123,14 @@ describe("RewardPool V3", function () {
       expect(await pAzur.rewardRate()).to.be.equal(0);
 
       const stakeId1 = await stakeFor(user, DEPOSIT);
+      expect(await pAzur.ownerOf(stakeId1)).to.equal(user);
+
       await updateStakingIncentive(INCENTIVE_REWARD, INCENTIVE_DURATION);
       await timeShiftBy(ethers, INCENTIVE_DURATION);
 
       const stakeId2 = await stakeFor(user2, DEPOSIT);
+      expect(await pAzur.ownerOf(stakeId2)).to.equal(user2);
+
       const rewardPerToken = (tokens(1) * INCENTIVE_REWARD) / DEPOSIT;
       expect(await pAzur.rewardPerToken()).to.be.closeToRelative(rewardPerToken);
 
@@ -142,7 +146,10 @@ describe("RewardPool V3", function () {
       await expect(claimReward(user2)).to.revertedWithCustomError(pAzur, "NoUnclaimedReward");
 
       expect(await unstake(user, [stakeId1])).to.equal(DEPOSIT);
+      await expect(pAzur.ownerOf(stakeId1)).to.revertedWithCustomError(pAzur, "ERC721NonexistentToken");
+
       expect(await unstake(user2, [stakeId2])).to.equal(DEPOSIT);
+      await expect(pAzur.ownerOf(stakeId2)).to.revertedWithCustomError(pAzur, "ERC721NonexistentToken");
     });
     it("Stake before the start of the incentive program and claim reward after it's end", async function () {
       for (const account of [user, user2, user3]) {
@@ -318,6 +325,21 @@ describe("RewardPool V3", function () {
         "SameStakingAndRewardToken",
       );
     });
+    it("Transfer a stake token", async function () {
+      const stakeId = await stakeFor(user, DEPOSIT);
+
+      await expect(pAzur.transferFrom(user, owner, stakeId)).to.be.revertedWithCustomError(
+        pAzur,
+        "NonTransferableToken",
+      );
+      await expect(pAzur.safeTransferFrom(user, owner, stakeId)).to.be.revertedWithCustomError(
+        pAzur,
+        "NonTransferableToken",
+      );
+      await expect(
+        pAzur["safeTransferFrom(address,address,uint256,bytes)"](user, owner, stakeId, "0x"),
+      ).to.be.revertedWithCustomError(pAzur, "NonTransferableToken");
+    });
     it("Unstake by a non-staker", async function () {
       const stakeId = await stakeFor(user, DEPOSIT);
 
@@ -325,14 +347,14 @@ describe("RewardPool V3", function () {
       await expect(unstake(owner, [stakeId])).to.be.revertedWithCustomError(pAzur, "OnlyStakeOwner");
     });
     it("Unstake a non-existent stake", async function () {
-      await expect(unstake(user, [12345])).to.be.revertedWithCustomError(pAzur, "StakeDoesNotExist");
+      await expect(unstake(user, [12345])).to.be.revertedWithCustomError(pAzur, "ERC721NonexistentToken");
     });
     it("Unstake an already unstaked stake", async function () {
       const stakeId = await stakeFor(user, DEPOSIT);
       await timeShiftBy(ethers, UNSTAKE_PERIOD);
       await unstake(user, [stakeId]);
 
-      await expect(unstake(user, [stakeId])).to.be.revertedWithCustomError(pAzur, "StakeDoesNotExist");
+      await expect(unstake(user, [stakeId])).to.be.revertedWithCustomError(pAzur, "ERC721NonexistentToken");
     });
     it("Unstake before the lock period has passed", async function () {
       await pAzur.connect(owner).changeUnstakePeriod(UNSTAKE_PERIOD);
