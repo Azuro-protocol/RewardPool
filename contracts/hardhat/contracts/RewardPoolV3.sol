@@ -41,7 +41,7 @@ contract RewardPoolV3 is OwnableUpgradeable, ERC721Upgradeable, IRewardPoolV3 {
     ) external initializer {
         if (stakingToken_ == rewardToken_) revert SameStakingAndRewardToken();
         __Ownable_init_unchained(msg.sender);
-        __ERC721_init_unchained("Locked $AZUR", "pAZUR");
+        __ERC721_init_unchained("Performance $AZUR", "pAZUR");
 
         stakingToken = stakingToken_;
         rewardToken = rewardToken_;
