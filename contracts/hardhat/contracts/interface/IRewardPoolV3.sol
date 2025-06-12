@@ -5,7 +5,6 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 interface IRewardPoolV3 {
     struct Stake {
-        address owner;
         uint96 amount;
         uint32 withdrawAfter;
     }
@@ -26,8 +25,8 @@ interface IRewardPoolV3 {
     error NoAvailableBalance(address token);
     error NoReward();
     error NoUnclaimedReward(address account);
+    error NonTransferableToken();
     error OnlyStakeOwner(uint256 stakeId, address owner);
-    error StakeDoesNotExist(uint256 stakeId);
     error SameStakingAndRewardToken();
     error StakeLocked(uint256 stakeId, uint256 secondsBeforeUnstake);
     error ZeroAmount();
@@ -53,8 +52,5 @@ interface IRewardPoolV3 {
 
     function stakes(
         uint256 stakeId
-    )
-        external
-        view
-        returns (address owner, uint96 amount, uint32 withdrawAfter);
+    ) external view returns (uint96 amount, uint32 withdrawAfter);
 }

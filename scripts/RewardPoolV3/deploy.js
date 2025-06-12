@@ -16,10 +16,10 @@ async function main() {
   const chainId = await hre.network.provider.send("eth_chainId");
   const timeout = getTimeout(chainId);
 
-  const rewardPoolV2 = await deployRewardPoolV3(AZUR, REWARD_TOKEN, UNSTAKEPERIOD);
+  const rewardPoolV3 = await deployRewardPoolV3(AZUR, REWARD_TOKEN, UNSTAKEPERIOD);
 
   await timeout();
-  console.log("RewardPoolV3:", await rewardPoolV2.getAddress());
+  console.log("RewardPoolV3:", await rewardPoolV3.getAddress());
 }
 
 main()

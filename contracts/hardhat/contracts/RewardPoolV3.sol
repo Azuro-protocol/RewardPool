@@ -4,8 +4,9 @@ pragma solidity 0.8.28;
 import "./interface/IRewardPoolV3.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/token/ERC721/ERC721Upgradeable.sol";
 
-contract RewardPoolV3 is OwnableUpgradeable, IRewardPoolV3 {
+contract RewardPoolV3 is OwnableUpgradeable, ERC721Upgradeable, IRewardPoolV3 {
     uint256 internal constant MIN_INCENTIVE_DURATION = 1;
     uint256 internal constant MAX_INCENTIVE_DURATION = 94608000; // 3 years
 
@@ -40,6 +41,8 @@ contract RewardPoolV3 is OwnableUpgradeable, IRewardPoolV3 {
     ) external initializer {
         if (stakingToken_ == rewardToken_) revert SameStakingAndRewardToken();
         __Ownable_init_unchained(msg.sender);
+        __ERC721_init_unchained("Locked $AZUR", "pAZUR");
+
         stakingToken = stakingToken_;
         rewardToken = rewardToken_;
         unstakePeriod = unstakePeriod_;
@@ -71,13 +74,11 @@ contract RewardPoolV3 is OwnableUpgradeable, IRewardPoolV3 {
         uint256 stakeId = nextStakeId++;
         uint32 withdrawAfter = uint32(block.timestamp) + unstakePeriod;
 
-        stakes[stakeId] = Stake({
-            owner: account,
-            amount: amount,
-            withdrawAfter: withdrawAfter
-        });
+        stakes[stakeId] = Stake({amount: amount, withdrawAfter: withdrawAfter});
         stakedBy[account] += amount;
         totalStaked += amount;
+
+        _mint(account, stakeId);
 
         emit Staked(stakeId, account, amount, withdrawAfter);
     }
@@ -172,6 +173,17 @@ contract RewardPoolV3 is OwnableUpgradeable, IRewardPoolV3 {
     }
 
     /**
+     * @notice Blank function. Token is non-transferable.
+     */
+    function transferFrom(
+        address from,
+        address to,
+        uint256 tokenId
+    ) public override {
+        revert NonTransferableToken();
+    }
+
+    /**
      * @notice Returns the current reward per token value.
      * @return The accumulated reward per token.
      */
@@ -201,20 +213,24 @@ contract RewardPoolV3 is OwnableUpgradeable, IRewardPoolV3 {
      * @return The amount of tokens unstaked.
      */
     function _processUnstake(uint256 stakeId) internal returns (uint256) {
-        Stake memory stake = stakes[stakeId];
-        if (stake.owner == address(0)) revert StakeDoesNotExist(stakeId);
-        if (msg.sender != stake.owner)
-            revert OnlyStakeOwner(stakeId, stake.owner);
+        address stakeOwner = ownerOf(stakeId);
+        if (msg.sender != stakeOwner)
+            revert OnlyStakeOwner(stakeId, stakeOwner);
+
+        Stake storage stake = stakes[stakeId];
         if (block.timestamp < stake.withdrawAfter)
             revert StakeLocked(stakeId, stake.withdrawAfter - block.timestamp);
 
+        uint96 amount = stake.amount;
+        stakedBy[msg.sender] -= amount;
+        totalStaked -= amount;
+
         delete stakes[stakeId];
-        stakedBy[msg.sender] -= stake.amount;
-        totalStaked -= stake.amount;
+        _burn(stakeId);
 
-        emit Unstaked(stakeId, stake.amount);
+        emit Unstaked(stakeId, amount);
 
-        return stake.amount;
+        return amount;
     }
 
     /**
