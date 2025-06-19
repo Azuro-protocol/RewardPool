@@ -165,6 +165,24 @@ describe("RewardPool V3", function () {
         expect(await claimReward(account)).to.be.closeToRelative(INCENTIVE_REWARD / 3n);
       }
     });
+    it.only("Stake before the start of the incentive program, transfer stake and claim reward after it's end", async function () {
+      const stakeId = await stakeFor(user, DEPOSIT);
+      const stakeId2 = await stakeFor(user2, DEPOSIT);
+
+      await updateStakingIncentive(INCENTIVE_REWARD, INCENTIVE_DURATION / 2);
+      expect(await usdt.balanceOf(owner.address)).to.be.equal(ownerUsdtBalanceBefore - INCENTIVE_REWARD);
+
+      await timeShiftBy(ethers, INCENTIVE_DURATION / 2);
+      await pAzur.connect(user).transferFrom(user, user2, stakeId);
+      await expect(unstake(user, [stakeId])).to.be.revertedWithCustomError(pAzur, "OnlyStakeOwner");
+
+      await updateStakingIncentive(INCENTIVE_REWARD, INCENTIVE_DURATION / 2);
+      await timeShiftBy(ethers, INCENTIVE_DURATION / 2);
+
+      expect(await claimReward(user)).to.be.closeToRelative(INCENTIVE_REWARD / 2n);
+      expect(await claimReward(user2)).to.be.closeToRelative((INCENTIVE_REWARD * 3n) / 2n);
+      expect(await unstake(user2, [stakeId])).to.equal(DEPOSIT);
+    });
     it("Stake before the start of the incentive program and claim reward a long time ago of it's end", async function () {
       await stakeFor(user, DEPOSIT);
       await updateStakingIncentive(INCENTIVE_REWARD, INCENTIVE_DURATION);
@@ -325,20 +343,16 @@ describe("RewardPool V3", function () {
         "SameStakingAndRewardToken",
       );
     });
-    it("Transfer a stake token", async function () {
+    it("Transfer burned stake", async function () {
       const stakeId = await stakeFor(user, DEPOSIT);
+
+      await timeShiftBy(ethers, UNSTAKE_PERIOD);
+      await unstake(user, [stakeId]);
 
       await expect(pAzur.transferFrom(user, owner, stakeId)).to.be.revertedWithCustomError(
         pAzur,
-        "NonTransferableToken",
+        "ERC721NonexistentToken",
       );
-      await expect(pAzur.safeTransferFrom(user, owner, stakeId)).to.be.revertedWithCustomError(
-        pAzur,
-        "NonTransferableToken",
-      );
-      await expect(
-        pAzur["safeTransferFrom(address,address,uint256,bytes)"](user, owner, stakeId, "0x"),
-      ).to.be.revertedWithCustomError(pAzur, "NonTransferableToken");
     });
     it("Unstake by a non-staker", async function () {
       const stakeId = await stakeFor(user, DEPOSIT);

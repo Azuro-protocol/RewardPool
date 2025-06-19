@@ -25,7 +25,6 @@ interface IRewardPoolV3 {
     error NoAvailableBalance(address token);
     error NoReward();
     error NoUnclaimedReward(address account);
-    error NonTransferableToken();
     error OnlyStakeOwner(uint256 stakeId, address owner);
     error SameStakingAndRewardToken();
     error StakeLocked(uint256 stakeId, uint256 secondsBeforeUnstake);
