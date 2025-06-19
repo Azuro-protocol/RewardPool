@@ -173,14 +173,26 @@ contract RewardPoolV3 is OwnableUpgradeable, ERC721Upgradeable, IRewardPoolV3 {
     }
 
     /**
-     * @notice Blank function. Token is non-transferable.
+     * @notice Transfers a stake token from one address to another.
+     * @dev Overrides the standard ERC721 `transferFrom` to include staking reward logic.
+     * @param from The address currently owning the token.
+     * @param to The address that will receive the token.
+     * @param tokenId The ID of the stake token to transfer.
      */
     function transferFrom(
         address from,
         address to,
         uint256 tokenId
     ) public override {
-        revert NonTransferableToken();
+        uint256 amount = stakes[tokenId].amount;
+
+        _updateReward(from);
+        stakedBy[from] -= amount;
+
+        _updateReward(to);
+        stakedBy[to] += amount;
+
+        super.transferFrom(from, to, tokenId);
     }
 
     /**
