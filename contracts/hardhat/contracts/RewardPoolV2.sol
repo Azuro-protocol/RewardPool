@@ -35,7 +35,7 @@ contract RewardPoolV2 is ERC20WrapperUpgradeable, OwnableUpgradeable {
     uint128 public reward;
     uint256 public rewardRate;
 
-    IRewardPoolV3 rewardPoolV3;
+    IRewardPoolV3 public rewardPoolV3;
 
     event Migrated(
         address account,
